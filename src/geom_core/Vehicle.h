@@ -191,7 +191,7 @@ public:
     void WriteX3DViewpoints( xmlNodePtr node );
     void WriteX3DViewpointProps( xmlNodePtr node, string orients, string cents, string posits, string sfov, string name );
     void WritePovRayFile( const string & file_name, int write_set );
-    void WriteSTEPFile( const string & file_name, int write_set );
+    void WriteSTEPFile( const string & file_name, int write_set, bool include_metadata=true );
     void WriteIGESFile( const string & file_name, int write_set );
     void WriteIGESFile( const string & file_name, int write_set, int lenUnit, bool splitSubSurfs, bool splitSurfs,
                         bool toCubic, double toCubicTol, bool trimTE, bool labelID, bool labelName,

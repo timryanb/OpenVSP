@@ -2552,9 +2552,14 @@ void Vehicle::FetchXFerSurfs( int write_set, vector< XferSurf > &xfersurfs )
     }
 }
 
-void Vehicle::WriteSTEPFile( const string & file_name, int write_set )
+void Vehicle::WriteSTEPFile( const string & file_name, int write_set, bool include_metadata )
 {
-    STEPutil step( m_STEPLenUnit(), m_STEPTol() );
+    
+	// Metadata variables
+	string label = "''";
+	int sref_id = 0;
+	
+	STEPutil step( m_STEPLenUnit(), m_STEPTol() );
 
     vector< Geom* > geom_vec = FindGeomVec( GetGeomVec( false ) );
     for ( int i = 0 ; i < ( int )geom_vec.size() ; i++ )
@@ -2600,7 +2605,37 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set )
                     }
                 }
 
-                step.AddSurf( &surf_vec[j], m_STEPSplitSurfs(), m_STEPMergePoints(), m_STEPToCubic(), m_STEPToCubicTol(), m_STEPTrimTE(), usplit, wsplit );
+				// Metadata label
+				if (include_metadata) {
+					sref_id = sref_id + 1;
+					label = "'{\"ID\":\"" + geom_vec[i]->GetID() + "\"" +
+						",\"m_ParentID\":\"" + geom_vec[i]->GetParentID() + "\"" +
+						",\"m_Type\":" + to_string(geom_vec[i]->GetType().m_Type) +
+						",\"m_Name\":\"" + geom_vec[i]->GetName() + "\""
+						",\"m_SymPlanFlag\":" + to_string(geom_vec[i]->m_SymPlanFlag.Get()) +
+						",\"m_SymAxFlag\":" + to_string(geom_vec[i]->m_SymAxFlag.Get()) +
+						",\"m_SymRotN\":" + to_string(geom_vec[i]->m_SymRotN.Get()) +
+						",\"m_FlipNormal\":" + to_string(surf_vec[j].GetFlipNormal()) +
+						",\"m_SurfType\":" + to_string(surf_vec[j].GetSurfType()) +
+						",\"m_SurfCfdType\":" + to_string(surf_vec[j].GetSurfCfdType()) +
+						",\"m_STEPSplitSurfs\":" + to_string(m_STEPSplitSurfs()) +
+						",\"m_STEPMergePoints\":" + to_string(m_STEPMergePoints()) +
+						",\"Sref ID\":" + to_string(sref_id) +
+						"}'";
+				}
+
+                // Main surface
+				step.AddSurf( &surf_vec[j], m_STEPSplitSurfs(), m_STEPMergePoints(), m_STEPToCubic(), m_STEPToCubicTol(), m_STEPTrimTE(), usplit, wsplit, label );
+
+				// Build wing reference surface is available
+				if (include_metadata) {
+					string geom_type = to_string(geom_vec[i]->GetType().m_Type);
+					if (geom_type == "5") {
+						// TODO Build the surface
+						// TODO Build the label
+						// TODO Add the surface
+					}
+				}
             }
         }
     }
