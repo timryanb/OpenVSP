@@ -56,6 +56,7 @@ Vehicle::Vehicle()
     m_STEPToCubic.Init( "ToCubic", "STEPSettings", this, false, 0, 1 );
     m_STEPToCubicTol.Init( "ToCubicTol", "STEPSettings", this, 1e-6, 1e-12, 1e12 );
     m_STEPTrimTE.Init( "TrimTE", "STEPSettings", this, false, 0, 1 );
+	m_STEPExportMetadata.Init("ExportMetadata", "STEPSettings", this, false, 0, 1);
 
     m_IGESLenUnit.Init( "LenUnit", "IGESSettings", this, vsp::LEN_FT, vsp::LEN_MM, vsp::LEN_FT );
     m_IGESSplitSurfs.Init( "SplitSurfs", "IGESSettings", this, true, 0, 1 );
@@ -231,6 +232,7 @@ void Vehicle::Init()
     m_STEPToCubic.Set( false );
     m_STEPToCubicTol.Set( 1e-6 );
     m_STEPTrimTE.Set( false );
+	m_STEPExportMetadata.Set(false);
 
     m_IGESLenUnit.Set( vsp::LEN_FT );
     m_IGESSplitSurfs.Set( true );
@@ -2552,7 +2554,7 @@ void Vehicle::FetchXFerSurfs( int write_set, vector< XferSurf > &xfersurfs )
     }
 }
 
-void Vehicle::WriteSTEPFile( const string & file_name, int write_set, bool include_metadata )
+void Vehicle::WriteSTEPFile( const string & file_name, int write_set)
 {
     
 	// Metadata variables
@@ -2606,7 +2608,7 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set, bool inclu
                 }
 
 				// Metadata label
-				if (include_metadata) {
+				if (m_STEPExportMetadata()) {
 					sref_id = sref_id + 1;
 					label = "'{\"ID\":\"" + geom_vec[i]->GetID() + "\"" +
 						",\"m_ParentID\":\"" + geom_vec[i]->GetParentID() + "\"" +
@@ -2628,7 +2630,7 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set, bool inclu
 				step.AddSurf( &surf_vec[j], m_STEPSplitSurfs(), m_STEPMergePoints(), m_STEPToCubic(), m_STEPToCubicTol(), m_STEPTrimTE(), usplit, wsplit, label );
 
 				// Build wing reference surface is available
-				if (include_metadata) {
+				if (m_STEPExportMetadata()) {
 					string geom_type = to_string(geom_vec[i]->GetType().m_Type);
 					if (geom_type == "5") {
 						// TODO Build the surface
