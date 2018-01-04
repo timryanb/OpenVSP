@@ -2635,9 +2635,17 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set)
 				if (m_STEPExportMetadata() && m_STEPExportSREF()) {
 					string geom_type = to_string(geom_vec[i]->GetType().m_Type);
 					if (geom_type == "5") {
-						// TODO Build the surface
-						// TODO Build the label
+						// Build the surface
+						VspSurf sref = geom_vec[i]->BuildWingRefSurf(surf_vec[j]);
+						// Build the label
+						label = "'{\"ID\":" + to_string(sref_id) +
+							",\"m_Name\":\"" + geom_vec[i]->GetName() + "\""
+							",\"m_SurfType\":" + to_string(sref.GetSurfType()) +
+							"}'";
 						// TODO Add the surface
+						usplit.clear();
+						wsplit.clear();
+						step.AddSurf(&sref, false, true, false, m_STEPToCubicTol(), false, usplit, wsplit, label);
 					}
 				}
             }

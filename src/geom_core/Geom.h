@@ -502,6 +502,9 @@ public:
     virtual void CreateDegenGeom( vector<DegenGeom> &dgs, const vector< vector< vec3d > > &pnts, const vector< vector< vec3d > > &nrms, const vector< vector< vec3d > > &uwpnts,
                                   bool urootcap, int isurf, bool preview, bool flipnormal, int surftype, VspSurf *fs );
 
+	//=== Build Reference Surface == //
+	virtual VspSurf BuildWingRefSurf(VspSurf &s);
+
     IntParm m_TessU;
     LimIntParm m_TessW;
 
