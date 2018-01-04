@@ -310,6 +310,7 @@ public:
     Parm m_STEPToCubicTol;
     BoolParm m_STEPTrimTE;
 	BoolParm m_STEPExportMetadata;
+	BoolParm m_STEPExportSREF;
 
     IntParm m_IGESLenUnit;
     BoolParm m_IGESSplitSurfs;

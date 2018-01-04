@@ -57,6 +57,7 @@ Vehicle::Vehicle()
     m_STEPToCubicTol.Init( "ToCubicTol", "STEPSettings", this, 1e-6, 1e-12, 1e12 );
     m_STEPTrimTE.Init( "TrimTE", "STEPSettings", this, false, 0, 1 );
 	m_STEPExportMetadata.Init("ExportMetadata", "STEPSettings", this, false, 0, 1);
+	m_STEPExportSREF.Init("ExportSREF", "STEPSettings", this, false, 0, 1);
 
     m_IGESLenUnit.Init( "LenUnit", "IGESSettings", this, vsp::LEN_FT, vsp::LEN_MM, vsp::LEN_FT );
     m_IGESSplitSurfs.Init( "SplitSurfs", "IGESSettings", this, true, 0, 1 );
@@ -233,6 +234,7 @@ void Vehicle::Init()
     m_STEPToCubicTol.Set( 1e-6 );
     m_STEPTrimTE.Set( false );
 	m_STEPExportMetadata.Set(false);
+	m_STEPExportSREF.Set(false);
 
     m_IGESLenUnit.Set( vsp::LEN_FT );
     m_IGESSplitSurfs.Set( true );
@@ -2630,7 +2632,7 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set)
 				step.AddSurf( &surf_vec[j], m_STEPSplitSurfs(), m_STEPMergePoints(), m_STEPToCubic(), m_STEPToCubicTol(), m_STEPTrimTE(), usplit, wsplit, label );
 
 				// Build wing reference surface is available
-				if (m_STEPExportMetadata()) {
+				if (m_STEPExportMetadata() && m_STEPExportSREF()) {
 					string geom_type = to_string(geom_vec[i]->GetType().m_Type);
 					if (geom_type == "5") {
 						// TODO Build the surface
