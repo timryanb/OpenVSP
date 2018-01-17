@@ -4,7 +4,7 @@ branches:
   only:
   - step_metadata_support_v3.5.0
 
-image: Previous Visual Studio 2015
+image: Visual Studio 2013
 
 configuration: Release
 
@@ -13,27 +13,27 @@ clone_folder: c:/projects/openvsp
 environment:
   matrix:
   - PYTHON: C:/Python27
-    GENERATOR: Visual Studio 14 2015
+    GENERATOR: Visual Studio 12 2013
     PYTHON_VERSION: 27
     ARCH: win32
   - PYTHON: C:/Python35
-    GENERATOR: Visual Studio 14 2015
+    GENERATOR: Visual Studio 12 2013
     PYTHON_VERSION: 35
     ARCH: win32
   - PYTHON: C:/Python36
-    GENERATOR: Visual Studio 14 2015
+    GENERATOR: Visual Studio 12 2013
     PYTHON_VERSION: 36
     ARCH: win32
   - PYTHON: C:/Python27-x64
-    GENERATOR: Visual Studio 14 2015 Win64
+    GENERATOR: Visual Studio 12 2013 Win64
     PYTHON_VERSION: 27
     ARCH: win64
   - PYTHON: C:/Python35-x64
-    GENERATOR: Visual Studio 14 2015 Win64
+    GENERATOR: Visual Studio 12 2013 Win64
     PYTHON_VERSION: 35
     ARCH: win64
   - PYTHON: C:/Python36-x64
-    GENERATOR: Visual Studio 14 2015 Win64
+    GENERATOR: Visual Studio 12 2013 Win64
     PYTHON_VERSION: 36
     ARCH: win64
 
@@ -61,7 +61,7 @@ build_script:
     -DCMAKE_BUILD_TYPE=%configurtion% ^
     C:/projects/openvsp/Libraries
     
-    msbuild /m:8 /verbosity:quiet /p:Configuration=%configuration% VSP_LIBRARIES.sln
+    msbuild /m /verbosity:quiet /p:Configuration=%configuration% VSP_LIBRARIES.sln
 
     cd C:/projects/openvsp/build/vsp
 
@@ -73,7 +73,7 @@ build_script:
     -DCMAKE_INSTALL_PREFIX=C:/projects/openvsp/install ^
     C:/projects/openvsp/src
 
-    msbuild /m:8 /verbosity:quiet /p:Configuration=%configuration% INSTALL.vcxproj
+    msbuild /m /verbosity:quiet /p:Configuration=%configuration% INSTALL.vcxproj
 
     cd C:/projects/openvsp
 
