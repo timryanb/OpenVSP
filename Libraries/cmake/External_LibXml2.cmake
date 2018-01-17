@@ -28,6 +28,14 @@ execute_process(
 
   set(libxml2_patch_command PATCH_COMMAND ${CMAKE_COMMAND} -E copy_if_different
     ${_self_dir}/libxml2_Makefile.msvc ${libxml2_source}/win32/Makefile.msvc)
+    
+  if(MSVC)
+    set(libxml2_patch_command ${libxml2_patch_command} COMMAND
+    ${CMAKE_COMMAND} -E copy
+    ${_self_dir}/../libxml2_vs2015_snprintf.patch ${libxml2_source}/include/libxml2_vs2015_snprintf.patch
+    COMMAND git apply ${libxml2_source}/include/libxml2_vs2015_snprintf.patch)
+  endif(MSVC)
+    
   set(libxml2_config_command CONFIGURE_COMMAND ${CMAKE_COMMAND} -P
     ${CMAKE_CURRENT_BINARY_DIR}/libxml2_config.cmake)
   set(libxml2_build_command BUILD_COMMAND ${CMAKE_COMMAND} -P

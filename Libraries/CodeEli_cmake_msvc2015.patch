@@ -1,0 +1,11 @@
+--- a/cmake/ConfigureCompiler.cmake	2015-11-07 13:51:17.000000000 -0500
++++ a/cmake/ConfigureCompiler.cmake	2018-01-17 15:53:33.477896000 -0500
+@@ -104,7 +104,7 @@
+   endif()
+ 
+   # set MS Visual Studio Compiler flags
+-  if (MSVC90 OR MSVC10 OR MSVC11 OR MSVC12)
++  if (MSVC)
+     set(CONFIGURE_COMPILER_SET_C_COMPILER_FLAGS ON)
+     set(CMAKE_C_FLAGS "/DNOMINMAX /DWIN32 /D_WINDOWS /W3 /Zm1000 /Qc99"
+                       CACHE STRING "Flags used by the compiler during all build types." FORCE)

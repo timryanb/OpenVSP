@@ -8,6 +8,19 @@ ELSE()
     SET( SC_SHARED ON )
 ENDIF()
 
+if(MSVC)
+  set(sc_source "${CMAKE_BINARY_DIR}/external/STEPCODE-prefix/src/STEPCODE")
+
+  get_filename_component(_self_dir ${CMAKE_CURRENT_LIST_FILE} PATH)
+
+  set(sc_patch_command PATCH_COMMAND ${CMAKE_COMMAND} -E copy
+    ${_self_dir}/stepcode_msvc2015_fix.patch ${sc_source}/include/stepcode_msvc2015_fix.patch
+    COMMAND
+    COMMAND git apply ${sc_source}/include/stepcode_msvc2015_fix.patch)
+else()
+  set(sc_patch_command "")
+endif()
+
 ExternalProject_Add( STEPCODE
 	URL ${CMAKE_CURRENT_SOURCE_DIR}/stepcode-7dcd6ef3418a.zip
 	CMAKE_ARGS -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
@@ -20,6 +33,7 @@ ExternalProject_Add( STEPCODE
 		-DSC_BUILD_SHARED_LIBS=${SC_SHARED}
 		-DSC_PYTHON_GENERATOR=OFF
 		-DSC_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+    ${sc_patch_command}
 )
 ExternalProject_Get_Property( STEPCODE SOURCE_DIR )
 ExternalProject_Get_Property( STEPCODE BINARY_DIR )
