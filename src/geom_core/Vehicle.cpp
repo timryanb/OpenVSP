@@ -2202,7 +2202,7 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set)
 						"}'";
 				}
 
-                step.AddSurf( &surf_vec[j], m_STEPSplitSurfs(), m_STEPMergePoints(), m_STEPToCubic(), m_STEPToCubicTol() );
+                step.AddSurf( &surf_vec[j], m_STEPSplitSurfs(), m_STEPMergePoints(), m_STEPToCubic(), m_STEPToCubicTol(), label );
 
 				// Build wing reference surface is available
 				if (m_STEPExportMetadata() && m_STEPExportSREF()) {
