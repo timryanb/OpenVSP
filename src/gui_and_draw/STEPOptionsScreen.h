@@ -44,6 +44,8 @@ protected:
     ToggleButton m_MergePointsToggle;
     ToggleButton m_ToCubicToggle;
     SliderInput m_ToCubicTolSlider;
+	ToggleButton m_ExportMetadataToggle;
+	ToggleButton m_ExportSREFToggle;
 
     int m_PrevUnit;
     double m_PrevTol;
@@ -51,6 +53,8 @@ protected:
     bool m_PrevMerge;
     bool m_PrevCubic;
     double m_PrevToCubicTol;
+	bool m_PrevExportMetadata;
+	bool m_PrevExportSREF;
 
     TriggerButton m_OkButton;
     TriggerButton m_CancelButton;

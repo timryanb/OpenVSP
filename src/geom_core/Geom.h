@@ -444,6 +444,9 @@ public:
     //===== Degenerate Geometry =====//
     virtual void CreateDegenGeom( vector<DegenGeom> &dgs);
 
+	//===== Build Reference Surface =====//
+	virtual VspSurf BuildWingRefSurf(VspSurf &s);
+
     IntParm m_TessU;
     LimIntParm m_TessW;
 

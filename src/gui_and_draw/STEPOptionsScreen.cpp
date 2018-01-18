@@ -13,7 +13,7 @@
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-STEPOptionsScreen::STEPOptionsScreen( ScreenMgr* mgr ) : BasicScreen( mgr, 250, 220, "STEP Options" )
+STEPOptionsScreen::STEPOptionsScreen( ScreenMgr* mgr ) : BasicScreen( mgr, 250, 325, "STEP Options" )
 {
     m_FLTK_Window->callback( staticCloseCB, this );
 
@@ -46,6 +46,10 @@ STEPOptionsScreen::STEPOptionsScreen( ScreenMgr* mgr ) : BasicScreen( mgr, 250, 
     m_GenLayout.AddYGap();
     m_GenLayout.AddButton( m_ToCubicToggle, "Convert to Cubic" );
     m_GenLayout.AddSlider( m_ToCubicTolSlider, "Tolerance", 10, "%5.4g", true );
+	m_GenLayout.AddYGap();
+	m_GenLayout.AddButton(m_ExportMetadataToggle, "Export Metadata");
+	m_GenLayout.AddButton(m_ExportSREFToggle, "Export SREF");
+	m_GenLayout.AddYGap();
 
     m_GenLayout.AddY( 25 );
     m_GenLayout.SetFitWidthFlag( false );
@@ -75,11 +79,19 @@ bool STEPOptionsScreen::Update()
         m_MergePointsToggle.Update( veh->m_STEPMergePoints.GetID() );
         m_ToCubicToggle.Update( veh->m_STEPToCubic.GetID() );
         m_ToCubicTolSlider.Update( veh->m_STEPToCubicTol.GetID() );
+		m_ExportMetadataToggle.Update(veh->m_STEPExportMetadata.GetID());
+		m_ExportSREFToggle.Update(veh->m_STEPExportSREF.GetID());
 
         if ( !veh->m_STEPToCubic() )
         {
             m_ToCubicTolSlider.Deactivate();
         }
+
+		if (!veh->m_STEPExportMetadata())
+		{
+			m_ExportSREFToggle.Deactivate();
+		}
+
     }
 
     m_FLTK_Window->redraw();
@@ -120,6 +132,8 @@ void STEPOptionsScreen::GuiDeviceCallBack( GuiDevice* device )
             veh->m_STEPMergePoints.Set( m_PrevMerge );
             veh->m_STEPToCubic.Set( m_PrevCubic );
             veh->m_STEPToCubicTol.Set( m_PrevToCubicTol );
+			veh->m_STEPExportMetadata.Set(m_PrevExportMetadata);
+			veh->m_STEPExportSREF.Set(m_PrevExportSREF);
         }
         Hide();
     }
@@ -143,6 +157,8 @@ bool STEPOptionsScreen::ShowSTEPOptionsScreen()
         m_PrevMerge = veh->m_STEPMergePoints();
         m_PrevCubic = veh->m_STEPToCubic();
         m_PrevToCubicTol = veh->m_STEPToCubicTol();
+		m_PrevExportMetadata = veh->m_STEPExportMetadata();
+		m_PrevExportSREF = veh->m_STEPExportSREF();
     }
 
     while( m_FLTK_Window->shown() )
@@ -167,6 +183,8 @@ void STEPOptionsScreen::CloseCallBack( Fl_Widget *w )
         veh->m_STEPMergePoints.Set( m_PrevMerge );
         veh->m_STEPToCubic.Set( m_PrevCubic );
         veh->m_STEPToCubicTol.Set( m_PrevToCubicTol );
+		veh->m_STEPExportMetadata.Set(m_PrevExportMetadata);
+		veh->m_STEPExportSREF.Set(m_PrevExportSREF);
     }
 
     Hide();

@@ -78,6 +78,13 @@ public:
     bool IsClosedU() const;
     bool IsClosedW() const;
 
+	vector<double> GetUFeature() {
+		return m_UFeature;
+	}
+	vector<double> GetWFeature() {
+		return m_WFeature;
+	}
+
     bool GetFlipNormal() { return m_FlipNormal; }
     void FlipNormal() { m_FlipNormal = !m_FlipNormal; }
     void ResetFlipNormal( ) { m_FlipNormal = false; }
