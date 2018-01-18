@@ -169,6 +169,7 @@ bool STEPOptionsScreen::ShowSTEPOptionsScreen()
         m_PrevToCubicTol = veh->m_STEPToCubicTol();
         m_PrevTrimTE = veh->m_STEPTrimTE();
 		m_PrevExportMetadata = veh->m_STEPExportMetadata();
+        m_PrevExportSREF = veh->m_STEPExportSREF();
     }
 
     while( m_FLTK_Window->shown() )

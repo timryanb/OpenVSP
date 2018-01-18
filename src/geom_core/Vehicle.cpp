@@ -2642,7 +2642,7 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set)
 							",\"m_Name\":\"" + geom_vec[i]->GetName() + "\""
 							",\"m_SurfType\":" + to_string(sref.GetSurfType()) +
 							"}'";
-						// TODO Add the surface
+						// Add the surface
 						usplit.clear();
 						wsplit.clear();
 						step.AddSurf(&sref, false, true, false, m_STEPToCubicTol(), false, usplit, wsplit, label);
