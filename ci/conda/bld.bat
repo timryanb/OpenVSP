@@ -12,7 +12,7 @@ cmake -G "Visual Studio 14 2015 Win64" ^
 
 if errorlevel 1 exit 1
 
-msbuild /m /verbosity:quiet VSP_LIBRARIES.sln
+msbuild /m /verbosity:quiet /p:Configuration=Release VSP_LIBRARIES.sln
 if errorlevel 1 exit 1
 
 cd ../vsp
@@ -27,5 +27,5 @@ cmake -G "Visual Studio 14 2015 Win64" ^
 
 if errorlevel 1 exit 1
 
-msbuild /m /verbosity:quiet INSTALL.vcxproj
+msbuild /m /verbosity:quiet /p:Configuration=Release INSTALL.vcxproj
 if errorlevel 1 exit 1
