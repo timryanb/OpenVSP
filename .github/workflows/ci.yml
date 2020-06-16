@@ -2,7 +2,10 @@ name: Workflow
 on:
   push:
     branches:
-      - 'step_metadata_support_v3.5.0'
+      - '*'
+  pull_request:
+    branches:
+      - '*'
 
 jobs:
 
