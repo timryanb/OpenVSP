@@ -6,17 +6,18 @@ mkdir vsp
 
 cd external
 
-cmake -G "Ninja" ^
+cmake -G "Visual Studio 14 2015 Win64" ^
     -DCMAKE_BUILD_TYPE=Release ^
     ../../Libraries
 
 if errorlevel 1 exit 1
-ninja vsp_libraries
+
+msbuild /m /verbosity:quiet VSP_LIBRARIES.sln
 if errorlevel 1 exit 1
 
 cd ../vsp
 
-cmake -G "Ninja" ^
+cmake -G "Visual Studio 14 2015 Win64" ^
     -DCMAKE_BUILD_TYPE=Release ^
     -DVSP_LIBRARY_PATH="%LIBRARY_PREFIX%/build/external" ^
     -DPYTHON_INCLUDE_DIR="%PYTHON%/include" ^
@@ -25,5 +26,6 @@ cmake -G "Ninja" ^
     ../../src
 
 if errorlevel 1 exit 1
-ninja vsp_libraries
+
+msbuild /m /verbosity:quiet INSTALL.vcxproj
 if errorlevel 1 exit 1

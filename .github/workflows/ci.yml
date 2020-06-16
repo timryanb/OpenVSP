@@ -10,7 +10,7 @@ on:
 jobs:
 
   build_win:
-    name: Build (${{ matrix.os }})
+    name: Build (${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
