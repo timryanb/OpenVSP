@@ -1,3 +1,5 @@
+mkdir install
+
 mkdir build
 cd build
 
@@ -19,7 +21,7 @@ cd ../vsp
 
 cmake -G "Visual Studio 14 2015 Win64" ^
     -DCMAKE_BUILD_TYPE=Release ^
-    -DVSP_LIBRARY_PATH="%LIBRARY_PREFIX%/build/external" ^
+    -DVSP_LIBRARY_PATH="../build/external" ^
     -DPYTHON_INCLUDE_DIR="%PYTHON%/include" ^
     -DPYTHON_LIBRARY="%PYTHON%/libs/python%PYTHON_VERSION%.lib" ^
     -DCMAKE_INSTALL_PREFIX="%LIBRARY_PREFIX%/install" ^
