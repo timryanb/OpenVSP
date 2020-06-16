@@ -2,9 +2,9 @@ version: 3.5.0.{build}
 
 branches:
   only:
-  - step_metadata_support_v3.5.0
+  - fuselage_sref
 
-image: Visual Studio 2013
+image: Previous Visual Studio 2013
 
 configuration: Release
 

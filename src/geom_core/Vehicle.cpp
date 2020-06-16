@@ -2204,9 +2204,10 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set)
 
                 step.AddSurf( &surf_vec[j], m_STEPSplitSurfs(), m_STEPMergePoints(), m_STEPToCubic(), m_STEPToCubicTol(), label );
 
-				// Build wing reference surface is available
+				// Build reference surface(s) if available
 				if (m_STEPExportMetadata() && m_STEPExportSREF()) {
 					string geom_type = to_string(geom_vec[i]->GetType().m_Type);
+					// Wing
 					if (geom_type == "5") {
 						// Build the surface
 						VspSurf sref = geom_vec[i]->BuildWingRefSurf(surf_vec[j]);
@@ -2217,6 +2218,23 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set)
 							"}'";
 						// Add the surface
 						step.AddSurf(&sref, false, true, false, m_STEPToCubicTol(), label);
+					}
+					// Fuselage
+					else if (geom_type == "4") {
+						// Horizontal surface
+						VspSurf hsref = geom_vec[i]->BuildFuselageRefSurfH(surf_vec[j]);
+						label = "'{\"ID\":" + to_string(sref_id) +
+							",\"m_Name\":\"" + geom_vec[i]->GetName() + "\""
+							",\"m_SurfType\":" + to_string(hsref.GetSurfType()) +
+							"}'";
+						step.AddSurf(&hsref, false, true, false, m_STEPToCubicTol(), label);
+						// Vertical surface
+						VspSurf vsref = geom_vec[i]->BuildFuselageRefSurfV(surf_vec[j]);
+						label = "'{\"ID\":" + to_string(sref_id) +
+							",\"m_Name\":\"" + geom_vec[i]->GetName() + "\""
+							",\"m_SurfType\":" + to_string(vsref.GetSurfType()) +
+							"}'";
+						step.AddSurf(&vsref, false, true, false, m_STEPToCubicTol(), label);
 					}
 				}
             }

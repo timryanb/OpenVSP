@@ -2955,3 +2955,56 @@ VspSurf Geom::BuildWingRefSurf(VspSurf &s)
 	return sref;
 
 }
+
+// === Build Fuselage Horizontal Ref Surf === //
+VspSurf Geom::BuildFuselageRefSurfH(VspSurf &s) {
+
+	double wmax = s.GetWMax();
+	double w1 = 0.5 * wmax;
+
+	// Iso-curves
+	VspCurve c1, c2;
+	vector <VspCurve> curves;
+
+	s.GetWConstCurve(c1, 0.);
+	s.GetWConstCurve(c2, w1);
+
+	curves.push_back(c1);
+	curves.push_back(c2);
+
+	// Surface
+	VspSurf sref;
+	sref.SkinC0(curves, false);
+
+	// Set reference surface type
+	sref.SetSurfType(100);
+
+	return sref;
+}
+
+// === Build Fuselage Vertical Ref Surf === //
+VspSurf Geom::BuildFuselageRefSurfV(VspSurf &s) {
+
+	double wmax = s.GetWMax();
+	double w1 = 0.25 * wmax;
+	double w2 = 0.75 * wmax;
+
+	// Iso-curves
+	VspCurve c1, c2;
+	vector <VspCurve> curves;
+
+	s.GetWConstCurve(c1, w1);
+	s.GetWConstCurve(c2, w2);
+
+	curves.push_back(c1);
+	curves.push_back(c2);
+
+	// Surface
+	VspSurf sref;
+	sref.SkinC0(curves, false);
+
+	// Set reference surface type
+	sref.SetSurfType(101);
+
+	return sref;
+}
