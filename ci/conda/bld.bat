@@ -24,7 +24,7 @@ cmake -G "Visual Studio 14 2015 Win64" ^
     -DVSP_LIBRARY_PATH="../build/external" ^
     -DPYTHON_INCLUDE_DIR="%PYTHON%/include" ^
     -DPYTHON_LIBRARY="%PYTHON%/libs/python%PYTHON_VERSION%.lib" ^
-    -DCMAKE_INSTALL_PREFIX="%LIBRARY_PREFIX%/install" ^
+    -DCMAKE_INSTALL_PREFIX="../../install" ^
     ../../src
 
 if errorlevel 1 exit 1
