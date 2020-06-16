@@ -21,7 +21,8 @@ jobs:
 
       - name: "Clone OpenVSP"
         uses: actions/checkout@v2
-        ref: 'step_metadata_support_v3.5.0'
+        with:
+          ref: 'conda_build'
 
       - name: "Add conda to PATH"
         shell: bash -l {0}
