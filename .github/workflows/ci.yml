@@ -1,0 +1,48 @@
+name: Workflow
+on:
+  push:
+    branches:
+      - 'step_metadata_support_v3.5.0'
+
+jobs:
+
+  build_win:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-latest']
+        python-version: ['3.6', '3.7', '3.8']
+    steps:
+
+      - name: "Clone OpenVSP"
+        uses: actions/checkout@v2
+        ref: 'step_metadata_support_v3.5.0'
+
+      - name: "Add conda to PATH"
+        shell: bash -l {0}
+        run: echo "::add-path::$CONDA/Scripts"
+
+      - name: "Install conda build"
+        shell: bash -l {0}
+        run: conda install -c conda-forge conda-build
+
+      - name: "Check conda"
+        shell: bash -l {0}
+        run: |
+          conda info -a
+          conda list
+
+      - name: "Run conda build"
+        shell: bash -l {0}
+        run: |
+          mkdir conda
+          source activate
+          conda build  ci/conda --python ${{ matrix.python-version }} --output-folder conda
+
+      - name: "Upload conda package"
+        uses: actions/upload-artifact@v2
+        with:
+          name: openvsp-${{ matrix.os }}
+          path: conda

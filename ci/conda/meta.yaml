@@ -1,0 +1,29 @@
+package:
+  name: openvsp
+  version: "3.5.0"
+
+source:
+  path: ../..
+
+build:
+  number: 0
+
+requirements:
+  build:
+    - {{ compiler('cxx') }}
+    - {{ compiler('c') }}
+    - cmake
+    - ninja
+    - swig
+
+  host:
+    - python
+
+  run:
+    - python
+
+about:
+  home: https://github.com/trelau/OpenVSP
+  license: NASA OPEN SOURCE AGREEMENT
+  summary: A parametric aircraft geometry tool
+  description: A parametric aircraft geometry tool modified to output some additional geometric metadata.
