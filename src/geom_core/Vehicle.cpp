@@ -64,6 +64,9 @@ Vehicle::Vehicle()
     m_STEPLabelSurfNo.Init( "LabelSurfNo", "STEPSettings", this, true, 0, 1 );
     m_STEPLabelDelim.Init( "LabelDelim", "STEPSettings", this, vsp::DELIM_COMMA, vsp::DELIM_COMMA, vsp::DELIM_NUM_TYPES - 1 );
 
+    m_STEPExportMetadata.Init("ExportMetadata", "STEPSettings", this, false, 0, 1);
+	m_STEPExportSREF.Init("ExportSREF", "STEPSettings", this, false, 0, 1);
+
     m_STEPStructureExportIndex.Init( "StructureExportIndex", "STEPSettings", this, 0, 0, 1000 );
     m_STEPStructureTol.Init( "StructureTolerance", "STEPSettings", this, 1e-6, 1e-12, 1e12 );
     m_STEPStructureSplitSurfs.Init( "StructureSplitSurfs", "STEPSettings", this, true, 0, 1 );
@@ -347,6 +350,9 @@ void Vehicle::Init()
     m_STEPToCubic.Set( false );
     m_STEPToCubicTol.Set( 1e-6 );
     m_STEPTrimTE.Set( false );
+
+    m_STEPExportMetadata.Set(false);
+	m_STEPExportSREF.Set(false);
 
     m_IGESLenUnit.Set( vsp::LEN_FT );
     m_IGESSplitSurfs.Set( true );
@@ -3232,6 +3238,8 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set )
 void Vehicle::WriteSTEPFile( const string & file_name, int write_set, bool labelID,
                              bool labelName, bool labelSurfNo, int delimType )
 {
+    int sref_id = 0;
+
     string delim = StringUtil::get_delim( delimType );
 
     STEPutil step( m_STEPLenUnit(), m_STEPTol() );
@@ -3282,33 +3290,96 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set, bool label
 
                 string prefix;
 
-                if ( labelID )
-                {
-                    prefix = geom_vec[i]->GetID();
+                if (m_STEPExportMetadata()) {
+                    sref_id = sref_id + 1;
+					prefix = "{\"ID\":\"" + geom_vec[i]->GetID() + "\"" +
+						",\"m_ParentID\":\"" + geom_vec[i]->GetParentID() + "\"" +
+						",\"m_Type\":" + to_string(geom_vec[i]->GetType().m_Type) +
+						",\"m_Name\":\"" + geom_vec[i]->GetName() + "\""
+						",\"m_SymPlanFlag\":" + to_string(geom_vec[i]->m_SymPlanFlag.Get()) +
+						",\"m_SymAxFlag\":" + to_string(geom_vec[i]->m_SymAxFlag.Get()) +
+						",\"m_SymRotN\":" + to_string(geom_vec[i]->m_SymRotN.Get()) +
+						",\"m_FlipNormal\":" + to_string(surf_vec[j].GetFlipNormal()) +
+						",\"m_SurfType\":" + to_string(surf_vec[j].GetSurfType()) +
+						",\"m_SurfCfdType\":" + to_string(surf_vec[j].GetSurfCfdType()) +
+						",\"m_STEPSplitSurfs\":" + to_string(m_STEPSplitSurfs()) +
+						",\"m_STEPMergePoints\":" + to_string(m_STEPMergePoints()) +
+						",\"Sref ID\":" + to_string(sref_id) +
+						"}";
                 }
-
-                if ( labelName )
-                {
-                    if ( prefix.size() > 0 )
+                else{
+                    if ( labelID )
                     {
-                        prefix.append( delim );
+                        prefix = geom_vec[i]->GetID();
                     }
-                    prefix.append( geom_vec[i]->GetName() );
-                }
 
-                if ( labelSurfNo )
-                {
-                    if ( prefix.size() > 0 )
+                    if ( labelName )
                     {
-                        prefix.append( delim );
+                        if ( prefix.size() > 0 )
+                        {
+                            prefix.append( delim );
+                        }
+                        prefix.append( geom_vec[i]->GetName() );
                     }
-                    prefix.append( to_string( j ) );
+
+                    if ( labelSurfNo )
+                    {
+                        if ( prefix.size() > 0 )
+                        {
+                            prefix.append( delim );
+                        }
+                        prefix.append( to_string( j ) );
+                    }
                 }
 
                 vector < SdaiB_spline_surface_with_knots* > surfs;
                 surf_vec[j].ToSTEP_BSpline_Quilt( &step, surfs, prefix, m_STEPSplitSurfs(), m_STEPMergePoints(), m_STEPToCubic(), m_STEPToCubicTol(), m_STEPTrimTE(), usplit, wsplit );
 
                 step.RepresentUntrimmedSurfs( surfs, prefix );
+
+                // Build reference surface(s) if available
+				if (m_STEPExportMetadata() && m_STEPExportSREF()) {
+					string geom_type = to_string( geom_vec[i]->GetType().m_Type );
+					// Wing
+					if (geom_type == "5") {
+						// Build the surface
+						VspSurf sref = geom_vec[i]->BuildWingRefSurf( surf_vec[j] );
+						// Build the label
+						prefix = "{\"ID\":" + to_string( sref_id ) +
+							",\"m_Name\":\"" + geom_vec[i]->GetName() + "\""
+							",\"m_SurfType\":" + to_string( sref.GetSurfType() ) +
+							"}";
+						// Add the surface
+						vector < SdaiB_spline_surface_with_knots* > surfs;
+						sref.ToSTEP_BSpline_Quilt( &step, surfs, prefix, false, true, false, m_STEPToCubicTol(), false, usplit, wsplit );
+						step.RepresentUntrimmedSurfs( surfs, prefix );
+					}
+
+					// Fuselage
+					else if (geom_type == "4") {
+						// Horizontal surface
+						VspSurf hsref = geom_vec[i]->BuildFuselageRefSurfH( surf_vec[j] );
+						prefix = "{\"ID\":" + to_string( sref_id) +
+							",\"m_Name\":\"" + geom_vec[i]->GetName() + "\""
+							",\"m_SurfType\":" + to_string( hsref.GetSurfType() ) +
+							"}";
+						// Add the surface
+						vector < SdaiB_spline_surface_with_knots* > surfs;
+						hsref.ToSTEP_BSpline_Quilt( &step, surfs, prefix, false, true, false, m_STEPToCubicTol(), false, usplit, wsplit );
+						step.RepresentUntrimmedSurfs( surfs, prefix );
+						// Vertical surface
+						VspSurf vsref = geom_vec[i]->BuildFuselageRefSurfV( surf_vec[j] );
+						prefix = "{\"ID\":" + to_string( sref_id ) +
+							",\"m_Name\":\"" + geom_vec[i]->GetName() + "\""
+							",\"m_SurfType\":" + to_string( vsref.GetSurfType() ) +
+							"}";
+						// Add the surface
+						surfs.clear();
+						vsref.ToSTEP_BSpline_Quilt( &step, surfs, prefix, false, true, false, m_STEPToCubicTol(), false, usplit, wsplit );
+						step.RepresentUntrimmedSurfs( surfs, prefix );
+					}
+
+				}
             }
         }
     }

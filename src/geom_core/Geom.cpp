@@ -5213,3 +5213,128 @@ void GeomXSec::OffsetXSecs( double off )
         }
     }
 }
+
+// === Build Wing Ref Surf === //
+VspSurf Geom::BuildWingRefSurf(VspSurf &s)
+{
+	// Assume w0=0, w1=WMax, so wLE=0.5 * w1
+	double w0 = 0.;
+	double w1;
+	double wLE;
+
+	// Surface data
+	w1 = s.GetWMax();
+	wLE = 0.5 * w1;
+
+	// Get the u-knots
+	vector <double> uk = s.GetUFeature();
+
+	// Curve list
+	vector <VspCurve> curves;
+
+	// For each u-knot, evaluate a point at the LE
+	// and TE of the surface and create a C0 curve.
+	for (int j = 0; j < (int)uk.size(); j++)
+	{
+		double u = uk[j];
+
+		// Point at TE
+		vec3d pTE = s.CompPnt(u, 0.);
+
+		// Point at LE
+		vec3d pLE = s.CompPnt(u, wLE);
+
+		// Make C0 curve
+		VspCurve c;
+		vector <vec3d> pnts;
+		pnts.push_back(pLE);
+		pnts.push_back(pTE);
+		vector <double> params;
+		params.push_back(0.);
+		params.push_back(1.);
+		c.InterpolateLinear(pnts, params, false);
+
+		// Add to curve list only if not coincident with last curve.
+		if ((int)curves.size() == 0)
+		{
+			curves.push_back(c);
+		}
+		else {
+			// Get point at LE of last curve in list.
+			vec3d plast = curves.back().CompPnt(0.);
+			double d = dist(plast, pLE);
+			if (d > 1.0e-7)
+			{
+				curves.push_back(c);
+			}
+		}
+	}
+
+	// Skin the C0 surface
+	VspSurf sref;
+	sref.SkinC0(curves, false);
+
+	// Swap and reverse directions so uw(0,0) is fwd/ind and
+	// uw(1,1) is aft/outbd and the normal is up.
+	sref.SwapUWDirections();
+	sref.ReverseWDirection();
+
+	// Set reference surface type to 99.
+	sref.SetSurfType(99);
+
+	return sref;
+
+}
+
+// === Build Fuselage Horizontal Ref Surf === //
+VspSurf Geom::BuildFuselageRefSurfH(VspSurf &s) {
+
+	double wmax = s.GetWMax();
+	double w1 = 0.5 * wmax;
+
+	// Iso-curves
+	VspCurve c1, c2;
+	vector <VspCurve> curves;
+
+	s.GetWConstCurve(c1, 0.);
+	s.GetWConstCurve(c2, w1);
+
+	curves.push_back(c1);
+	curves.push_back(c2);
+
+	// Surface
+	VspSurf sref;
+	sref.SkinC0(curves, false);
+
+	// Set reference surface type
+	sref.SetSurfType(100);
+
+	return sref;
+}
+
+// === Build Fuselage Vertical Ref Surf === //
+VspSurf Geom::BuildFuselageRefSurfV(VspSurf &s) {
+
+	double wmax = s.GetWMax();
+	double w1 = 0.25 * wmax;
+	double w2 = 0.75 * wmax;
+
+	// Iso-curves
+	VspCurve c1, c2;
+	vector <VspCurve> curves;
+
+	s.GetWConstCurve(c1, w1);
+	s.GetWConstCurve(c2, w2);
+
+	curves.push_back(c1);
+	curves.push_back(c2);
+
+	// Surface
+	VspSurf sref;
+	sref.SkinC0(curves, false);
+
+	// Set reference surface type
+	sref.SetSurfType(101);
+
+	return sref;
+}

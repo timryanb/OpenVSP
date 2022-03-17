@@ -13,7 +13,7 @@
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-STEPOptionsScreen::STEPOptionsScreen( ScreenMgr* mgr ) : BasicScreen( mgr, 250, 370, "Untrimmed STEP Options" )
+STEPOptionsScreen::STEPOptionsScreen( ScreenMgr* mgr ) : BasicScreen( mgr, 250, 470, "Untrimmed STEP Options" )
 {
     m_FLTK_Window->callback( staticCloseCB, this );
 
@@ -72,6 +72,14 @@ STEPOptionsScreen::STEPOptionsScreen( ScreenMgr* mgr ) : BasicScreen( mgr, 250, 
     m_LabelDelimChoice.AddItem( "None" );
     m_GenLayout.AddChoice( m_LabelDelimChoice, "Delimeter" );
 
+	m_GenLayout.AddYGap();
+
+	m_GenLayout.AddDividerBox( "AFEM Options" );
+	m_GenLayout.AddButton(m_ExportMetadataToggle, "Export Metadata");
+	m_GenLayout.AddButton(m_ExportSREFToggle, "Export SREF");
+
+	m_GenLayout.AddYGap();
+
     m_GenLayout.AddY( 25 );
     m_GenLayout.SetFitWidthFlag( false );
     m_GenLayout.SetSameLineFlag( true );
@@ -108,11 +116,18 @@ bool STEPOptionsScreen::Update()
         m_LabelNameToggle.Update( veh->m_STEPLabelName.GetID() );
         m_LabelSurfNoToggle.Update( veh->m_STEPLabelSurfNo.GetID() );
         m_LabelDelimChoice.Update( veh->m_STEPLabelDelim.GetID() );
+        m_ExportMetadataToggle.Update(veh->m_STEPExportMetadata.GetID());
+		m_ExportSREFToggle.Update(veh->m_STEPExportSREF.GetID());
 
         if ( !veh->m_STEPToCubic() )
         {
             m_ToCubicTolSlider.Deactivate();
         }
+
+        if (!veh->m_STEPExportMetadata())
+		{
+			m_ExportSREFToggle.Deactivate();
+		}
     }
 
     m_FLTK_Window->redraw();
@@ -162,6 +177,9 @@ void STEPOptionsScreen::GuiDeviceCallBack( GuiDevice* device )
             veh->m_STEPLabelSurfNo.Set( m_PrevLabelSurfNo );
             veh->m_STEPLabelDelim.Set( m_PrevLabelDelim );
 
+            veh->m_STEPExportMetadata.Set(m_PrevExportMetadata);
+			veh->m_STEPExportSREF.Set(m_PrevExportSREF);
+
         }
         Hide();
     }
@@ -193,6 +211,9 @@ bool STEPOptionsScreen::ShowSTEPOptionsScreen()
         m_PrevLabelName = veh->m_STEPLabelName();
         m_PrevLabelSurfNo = veh->m_STEPLabelSurfNo();
         m_PrevLabelDelim = veh->m_STEPLabelDelim();
+
+        m_PrevExportMetadata = veh->m_STEPExportMetadata();
+		m_PrevExportSREF = veh->m_STEPExportSREF();
     }
 
     while( m_FLTK_Window->shown() )
@@ -225,6 +246,9 @@ void STEPOptionsScreen::CloseCallBack( Fl_Widget *w )
         veh->m_STEPLabelName.Set( m_PrevLabelName );
         veh->m_STEPLabelSurfNo.Set( m_PrevLabelSurfNo );
         veh->m_STEPLabelDelim.Set( m_PrevLabelDelim );
+
+        veh->m_STEPExportMetadata.Set( m_PrevExportMetadata );
+		veh->m_STEPExportSREF.Set( m_PrevExportSREF );
     }
 
     Hide();

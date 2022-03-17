@@ -345,6 +345,9 @@ public:
     BoolParm m_STEPLabelSurfNo;
     IntParm m_STEPLabelDelim;
 
+    BoolParm m_STEPExportMetadata;
+	BoolParm m_STEPExportSREF;
+
     IntParm m_STEPStructureExportIndex;
     Parm m_STEPStructureTol;
     BoolParm m_STEPStructureSplitSurfs;

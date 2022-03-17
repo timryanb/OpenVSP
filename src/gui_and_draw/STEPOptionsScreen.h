@@ -53,6 +53,9 @@ protected:
     ToggleButton m_LabelSurfNoToggle;
     Choice m_LabelDelimChoice;
 
+    ToggleButton m_ExportMetadataToggle;
+	ToggleButton m_ExportSREFToggle;
+
     int m_PrevUnit;
     double m_PrevTol;
     bool m_PrevSplit;
@@ -67,6 +70,9 @@ protected:
     bool m_PrevLabelName;
     bool m_PrevLabelSurfNo;
     int m_PrevLabelDelim;
+
+    bool m_PrevExportMetadata;
+	bool m_PrevExportSREF;
 
     TriggerButton m_OkButton;
     TriggerButton m_CancelButton;
