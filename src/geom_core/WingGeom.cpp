@@ -615,6 +615,7 @@ WingSect::WingSect( XSecCurve *xsc ) : BlendWingSect( xsc)
     m_XDelta  = m_YDelta  = m_ZDelta  = 0;
     m_XRotate = m_YRotate = m_ZRotate = 0;
     m_XCenterRot = m_YCenterRot = m_ZCenterRot = 0;
+    m_ThickScale = 1.0;
 
     m_Aspect.Init( "Aspect", m_GroupName, this, 1.0, 0.001, 1000.0 );
     m_Aspect.SetDescript( "Aspect Ratio of Wing Section" );
@@ -648,6 +649,9 @@ WingSect::WingSect( XSecCurve *xsc ) : BlendWingSect( xsc)
     m_Dihedral.Init( "Dihedral", m_GroupName, this, 0.0, -360.0, 360.0 );
     m_Dihedral.SetDescript( "Dihedral of Wing Section" );
 
+    m_RotateMatchDiedralFlag.Init( "RotateMatchDideralFlag", m_GroupName, this, 0, 0, 1 );
+    m_RotateMatchDiedralFlag.SetDescript( "Rotate foil perpendicular to dihedral" );
+
     m_RootCluster.Init( "InCluster", m_GroupName, this, 1.0, 1e-4, 10.0 );
     m_RootCluster.SetDescript( "Inboard Tess Cluster Control" );
     m_TipCluster.Init( "OutCluster", m_GroupName, this, 1.0, 1e-4, 10.0 );
@@ -673,6 +677,8 @@ void WingSect::UpdateFromWing()
 
     VspCurve baseCurve = GetUntransformedCurve();
 
+    baseCurve.ScaleY( m_ThickScale );
+
     baseCurve.Transform( mat );
 
     //==== Apply Transform ====//
@@ -682,9 +688,9 @@ void WingSect::UpdateFromWing()
     tran_mat.translatef( m_XDelta, m_YDelta, m_ZDelta );
 
     Matrix4d rotate_mat;
-    rotate_mat.rotateX( m_XRotate );
-    rotate_mat.rotateY( m_YRotate );
-    rotate_mat.rotateZ( m_ZRotate );
+    rotate_mat.rotateZ( m_ZRotate );  // Not used
+    rotate_mat.rotateY( m_YRotate );  // Twist
+    rotate_mat.rotateX( m_XRotate );  // Dihedral
 
     Matrix4d cent_mat;
     cent_mat.translatef( -m_XCenterRot, -m_YCenterRot, -m_ZCenterRot );
@@ -940,7 +946,7 @@ void WingSect::ReadV2File( xmlNodePtr &sec_node )
         m_SweepLoc.Set( 1.0 );
     }
 
-    m_Twist = XmlUtil::FindDouble( sec_node, "Twist", m_Twist() );
+    m_Twist = -XmlUtil::FindDouble( sec_node, "Twist", m_Twist() );
     m_TwistLoc = XmlUtil::FindDouble( sec_node, "TwistLoc", m_TwistLoc() );
     m_Dihedral = XmlUtil::FindDouble( sec_node, "Dihedral", m_Dihedral() );
 
@@ -1238,8 +1244,11 @@ WingGeom::WingGeom( Vehicle* vehicle_ptr ) : GeomXSec( vehicle_ptr )
     m_RelativeTwistFlag.Init("RelativeTwistFlag", m_Name, this, 0, 0, 1 );
     m_RelativeTwistFlag.SetDescript( "Relative or Absolute Twist" );
 
-    m_RotateAirfoilMatchDiedralFlag.Init("RotateAirfoilMatchDideralFlag", m_Name, this, 0, 0, 1 );
-    m_RotateAirfoilMatchDiedralFlag.SetDescript( "Rotate Airfoil To Stay Tangent To Dihedral (or Not)" );
+    m_RotateAirfoilMatchDiedralFlag.Init( "RotateAirfoilMatchDideralFlag", m_Name, this, 0, 0, 1 );
+    m_RotateAirfoilMatchDiedralFlag.SetDescript( "Rotate all foils perpendicular to dihedral" );
+
+    m_CorrectAirfoilThicknessFlag.Init( "CorrectAirfoilthicknessFlag", m_Name, this, 1, 0, 1 );
+    m_CorrectAirfoilThicknessFlag.SetDescript( "Scale airfoil thickness to correct for dihedral rotation" );
 
     m_TotalSpan.Init( "TotalSpan", m_Name, this, 1.0, 1e-6, 1000000.0 );
     m_TotalSpan.SetDescript( "Total Planform Span" );
@@ -1710,6 +1719,8 @@ void WingGeom::UpdateSurf()
     double total_dihed_offset = 0.0;
     double total_twist = 0.0;
 
+    double previous_dihead_rot = 0.0;
+
     //==== Load End Points for Each Section ====//
     for ( int i = 0 ; i < nxsec ; i++ )
     {
@@ -1801,8 +1812,18 @@ void WingGeom::UpdateSurf()
             }
             untransformed_crv_vec[i] = utc;
 
-            double dihead_rot = 0.0;
             if ( m_RotateAirfoilMatchDiedralFlag() )
+            {
+                ws->m_RotateMatchDiedralFlag.Deactivate();
+            }
+            else
+            {
+                ws->m_RotateMatchDiedralFlag.Activate();
+            }
+
+            double dihead_rot = 0.0;
+            double foil_scale = 1.0;
+            if ( m_RotateAirfoilMatchDiedralFlag() || ws->m_RotateMatchDiedralFlag() )
             {
                 if ( i == 0 )
                 {
@@ -1816,7 +1837,19 @@ void WingGeom::UpdateSurf()
                 {
                     dihead_rot = 0.5*( GetSumDihedral( i ) + GetSumDihedral( i+1 ) );
                 }
+
+
+                if ( m_CorrectAirfoilThicknessFlag() )
+                {
+                    if ( i != 0 && i !=  ( m_XSecSurf.NumXSec() - 1 ) ) // Not first or last foils.
+                    {
+                        foil_scale = 1.0 / cos( ( dihead_rot - previous_dihead_rot ) * DEG_2_RAD );
+                    }
+                }
             }
+            previous_dihead_rot = dihead_rot;
+
+            ws->m_ThickScale = foil_scale;
 
             //==== Load Transformations =====//
             ws->m_YDelta = total_span;

@@ -53,6 +53,8 @@ public:
     bool IsClosed() const;
 
     bool RoundJoint( double rad, int i );
+    bool RoundJoint( double rad, double u );
+    bool RoundJoints( double rad, vector < double > uvec );
 
     void Modify( int type, bool le, double len, double off, double str );
 
@@ -74,6 +76,8 @@ public:
     void SetCubicControlPoints( const vector< vec3d > & cntrl_pts ); // Automatic curve parameterization
     void SetCubicControlPoints( const vector < vec3d > & cntrl_pts, const vector < double > & param ); // Specify curve parameterization
     void GetCubicControlPoints( vector< vec3d >& cntrl_pts, vector< double >& param );
+
+    void GetLinearControlPoints( vector< vec3d >& cntrl_pts, vector< double >& param );
 
     const piecewise_curve_type & GetCurve() const;
     void SetCurve( const piecewise_curve_type &c );
@@ -139,6 +143,8 @@ public:
     void ScaleY( double s );
     void ScaleZ( double s );
 
+    void ZeroI( int i );
+
     void ReflectXY();
     void ReflectXZ();
     void ReflectYZ();
@@ -158,7 +164,7 @@ public:
 
     vector < BezierSegment > GetBezierSegments();
 
-    void CreateRoundedRectangle( double w, double h, double k, double sk, double vsk, double & r1, double & r2, double & r3, double & r4, bool keycorner = true );
+    void CreateRoundedRectangle( double w, double h, double k, double sk, double vsk, const double & r1, const double & r2, const double & r3, const double & r4, bool keycorner = true );
 
     void ToCubic( double tol = 0.1 );
 

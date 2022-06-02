@@ -74,7 +74,7 @@ public:
     void UpdateGeom( const string &geom_id );
     void ForceUpdate( int dirtyflag = GeomBase::NONE );
     static void UpdateGui();
-    static void RunScript( const string & file_name, const string & function_name = "void main()" );
+    static int RunScript( const string & file_name, const string & function_name = "main" );
 
     Geom* FindGeom( const string & geom_id );
     vector< Geom* > FindGeomVec( const vector< string > & geom_id_vec );
@@ -270,6 +270,8 @@ public:
     void CompCurvature01(const std::string &geom_id, const int &surf_indx, const double &u, const double &w, double &k1, double &k2, double &ka, double &kg);
     double ProjPnt01I(const std::string &geom_id, const vec3d & pt, int &surf_indx, double &u, double &w);
     double AxisProjPnt01I(const std::string &geom_id, const int &iaxis, const vec3d &pt, int &surf_indx_out, double &u_out, double &w_out, vec3d &p_out );
+
+    vec3d CompPntRST( const std::string &geom_id, const int &surf_indx, const double &r, const double &s, const double &t );
 
     //=== Surface API ===//
     string ExportSurfacePatches( int set );

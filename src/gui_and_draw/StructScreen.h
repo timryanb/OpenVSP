@@ -38,12 +38,8 @@ public:
     virtual void UpdateMainSurfChoice();
     virtual void UpdateFeaPartChoice();
     virtual void UpdateFeaPropertyBrowser();
-    virtual void UpdateFeaPropertyChoice();
     virtual void UpdateFeaMaterialBrowser();
     virtual void UpdateFeaMaterialChoice();
-
-    virtual void UpdateGenPropertyIndex( Choice* property_choice );
-    virtual void UpdateGenCapPropertyIndex( Choice* property_choice );
 
     virtual void UpdateUnitLabels();
 
@@ -67,7 +63,6 @@ public:
     virtual bool Update();
 
     virtual void LoadDrawObjs( vector< DrawObj* > &draw_obj_vec );
-    virtual void UpdateDrawObjs();
 
     ProcessUtil* getFeaMeshProcess()
     {
@@ -141,13 +136,6 @@ private:
     TriggerButton m_EditFeaPartButton;
     TriggerButton m_AddFeaPartButton;
     TriggerButton m_DelFeaPartButton;
-    ToggleButton m_ShellToggle;
-    ToggleButton m_CapToggle;
-    ToggleButton m_ShellCapToggle;
-    ToggleRadioGroup m_ShellCapToggleGroup;
-
-    Choice m_GenPropertyChoice;
-    Choice m_GenCapPropertyChoice;
 
     ToggleButton m_ShowFeaPartButton;
     ToggleButton m_HideFeaPartButton;
@@ -160,6 +148,9 @@ private:
     Fl_Browser* m_FeaMaterialSelectBrowser;
 
     GroupLayout m_MaterialEditSubGroup;
+
+    Choice m_FeaMaterialTypeChoice;
+
     StringInput m_FeaMaterialNameInput;
 
     SliderAdjRangeInput m_MatDensitySlider;
@@ -169,6 +160,21 @@ private:
     SliderAdjRangeInput m_MatPoissonSlider;
     SliderAdjRangeInput m_MatThermalExCoeffSlider;
     TriggerButton m_MatThermalExCoeffUnit;
+    StringOutput m_MatShearModOutput;
+    TriggerButton m_MatShearModUnit;
+
+    Input m_MatE1Input;
+    Input m_MatE2Input;
+    Input m_MatE3Input;
+    Input m_Matnu12Input;
+    Input m_Matnu13Input;
+    Input m_Matnu23Input;
+    Input m_MatG12Input;
+    Input m_MatG13Input;
+    Input m_MatG23Input;
+    Input m_MatA1Input;
+    Input m_MatA2Input;
+    Input m_MatA3Input;
 
     //===== Property Tab =====//
     GroupLayout* m_CurFeaPropDispGroup;
@@ -261,6 +267,9 @@ private:
     ToggleButton m_ToCubicToggle;
     SliderAdjRangeInput m_ToCubicTolSlider;
 
+    SliderAdjRangeInput m_NodeOffset;
+    SliderAdjRangeInput m_ElementOffset;
+
     //===== Output Items =====//
     ToggleButton m_StlFile;
     ToggleButton m_GmshFile;
@@ -349,7 +358,7 @@ private:
     int m_FeaCurrMainSurfIndx;
     vector < int > m_SelectedPartIndexVec;
     int m_SelectedFeaPartChoice;
-    int m_NumFeaPartChoices;
+    int m_FeaPartChoiceSubSurfOffset;
 };
 
 #endif

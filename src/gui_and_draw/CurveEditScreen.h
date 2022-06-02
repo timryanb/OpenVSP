@@ -56,6 +56,7 @@ private:
     GroupLayout m_PtLayout;
 
     // XSec editor area GUI elements
+    Choice m_ViewChoice;
     VSPGUI::EditXSecWindow* m_XSecGlWin;
     Ca_X_Axis* m_XAxis;
     Ca_Y_Axis* m_YAxis;
@@ -72,6 +73,8 @@ private:
 
     HWXSecCurveDriverGroup m_DefaultXSecDriverGroup;
     DriverGroupBank m_XSecDriverGroupBank;
+
+    SliderAdjRangeInput m_DepthSlider;
 
     SliderAdjRangeInput m_SplitPtSlider;
     TriggerButton m_SplitButton;
@@ -122,7 +125,7 @@ private:
     DrawObj m_CurrentPntDrawObj;
 
     // Vector of sliders to match the curve parameter vectors
-    vector < vector < SliderAdjRangeInput > > m_SliderVecVec;
+    vector < vector < Input > > m_InputVecVec;
     vector < CheckButton > m_EnforceG1Vec;
     vector < CheckButton > m_FixedUCheckVec;
 

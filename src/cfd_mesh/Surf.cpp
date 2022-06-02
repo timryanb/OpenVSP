@@ -394,11 +394,11 @@ void Surf::LimitTargetMap( const MSCloud &es_cloud, MSTree &es_tree, double minm
 
                 MSTreeResults es_matches;
 
-                int nMatches = es_tree.radiusSearch( query_pt, r2max, es_matches, params );
+                unsigned int nMatches = es_tree.radiusSearch( query_pt, r2max, es_matches, params );
 
                 for ( int k = 0; k < nMatches; k++ )
                 {
-                    int imatch = es_matches[k].first;
+                    unsigned int imatch = es_matches[k].first;
                     double r = sqrt( es_matches[k].second );
 
                     double str = es_cloud.sources[imatch]->m_str;
@@ -536,7 +536,8 @@ void Surf::FindBorderCurves()
     pnts[1].set_xyz( max_u, min_w, 0 );
 
     scrv = new SCurve( this );
-    scrv->BuildBezierCurve( pnts, 0.25 );
+    scrv->InterpolateLinear( pnts );
+    scrv->PromoteTo( 3 );  // Need to be cubic as intermediate points are checked for degeneracy.
 
     if ( scrv->Length( 10 ) > degen_tol )
     {
@@ -551,7 +552,8 @@ void Surf::FindBorderCurves()
     pnts[1].set_xyz( max_u, max_w, 0 );
 
     scrv = new SCurve( this );
-    scrv->BuildBezierCurve( pnts, 0.25 );
+    scrv->InterpolateLinear( pnts );
+    scrv->PromoteTo( 3 );  // Need to be cubic as intermediate points are checked for degeneracy.
 
     if ( scrv->Length( 10 ) > degen_tol )
     {
@@ -566,7 +568,8 @@ void Surf::FindBorderCurves()
     pnts[1].set_xyz( min_u, max_w, 0 );
 
     scrv = new SCurve( this );
-    scrv->BuildBezierCurve( pnts, 0.25 );
+    scrv->InterpolateLinear( pnts );
+    scrv->PromoteTo( 3 );  // Need to be cubic as intermediate points are checked for degeneracy.
 
     if ( scrv->Length( 10 ) > degen_tol )
     {
@@ -578,10 +581,11 @@ void Surf::FindBorderCurves()
     }
 
     pnts[0].set_xyz( min_u, max_w,   0 );           // Dec W
-    pnts[1].set_xyz( min_u, min_w,       0 );
+    pnts[1].set_xyz( min_u, min_w,   0 );
 
     scrv = new SCurve( this );
-    scrv->BuildBezierCurve( pnts, 0.25 );
+    scrv->InterpolateLinear( pnts );
+    scrv->PromoteTo( 3 );  // Need to be cubic as intermediate points are checked for degeneracy.
 
     if ( scrv->Length( 10 ) > degen_tol )
     {
@@ -862,7 +866,7 @@ void Surf::SetBBox( const vec3d &pmin, const vec3d &pmax )
 }
 
 
-void Surf::InitMesh( vector< ISegChain* > chains )
+void Surf::InitMesh( vector< ISegChain* > chains, SurfaceIntersectionSingleton *MeshMgr )
 {
 
 //static int name_cnt = 0;
@@ -1018,7 +1022,7 @@ void Surf::InitMesh( vector< ISegChain* > chains )
 //isegVec = smallMeshSegVec;
 
 
-    m_Mesh.InitMesh( uwPntVec, isegVec );
+    m_Mesh.InitMesh( uwPntVec, isegVec, MeshMgr );
 }
 
 
@@ -1244,10 +1248,9 @@ double Surf::GetWScale( double u01 )      // u 0->1
     return wscale;
 }
 
-bool Surf::ValidUW( vec2d & uw )
+bool Surf::ValidUW( vec2d & uw, double slop ) const
 {
     //return true;
-    double slop = 1.0e-4;
     if ( uw[0] < m_SurfCore.GetMinU() - slop )
     {
         return false;
@@ -1442,4 +1445,71 @@ vec3d Surf::CompPnt( double u, double w ) const
 vec3d Surf::CompPnt01( double u, double w ) const
 {
     return m_SurfCore.CompPnt01( u, w );
+}
+
+// Compute the individual element material orientation after mesh has been created.  Consequently, we
+// know the U, V coordinates of element centers required to find the local directions used by NASTRAN in some cases.
+vec3d Surf::GetFeaElementOrientation( double u, double w )
+{
+    return GetFeaElementOrientation( u, w, m_FeaOrientationType, m_FeaOrientation );
+}
+
+vec3d Surf::GetFeaElementOrientation( double u, double w, int type, const vec3d & defaultorientation )
+{
+    // All COMP_XYZ, OML_UVRST and cases with invalid u, w
+    vec3d orient = defaultorientation;
+    if ( type == vsp::FEA_ORIENT_GLOBAL_X )
+    {
+        orient = vec3d( 1.0, 0, 0 );
+    }
+    else if ( type == vsp::FEA_ORIENT_GLOBAL_Y )
+    {
+        orient = vec3d( 0, 1.0, 0 );
+    }
+    else if ( type == vsp::FEA_ORIENT_GLOBAL_Z )
+    {
+        orient = vec3d( 0, 0, 1.0 );
+    }
+    else if ( type == vsp::FEA_ORIENT_PART_U )
+    {
+        vec2d uw = vec2d( u, w );
+        if ( ValidUW( uw ) )
+        {
+            orient = m_SurfCore.CompTanU( u, w );
+        }
+    }
+    else if ( type == vsp::FEA_ORIENT_PART_V )
+    {
+        vec2d uw = vec2d( u, w );
+        if ( ValidUW( uw ) )
+        {
+            orient = m_SurfCore.CompTanW( u, w );
+        }
+    }
+
+    return orient;
+}
+
+// Compute the per-surface material orientation for CalculiX.  Since no per-element information is available,
+// the per-surface stored orientation is used.
+vec3d Surf::GetFeaElementOrientation()
+{
+    // All COMP_XYZ, OML_UVRST, PART_UV
+    vec3d orient = m_FeaOrientation;
+
+    // Global XYZ are done here as they are independent of the transformations applied to the other orientations.
+    if ( m_FeaOrientationType == vsp::FEA_ORIENT_GLOBAL_X )
+    {
+        orient = vec3d( 1.0, 0, 0 );
+    }
+    else if ( m_FeaOrientationType == vsp::FEA_ORIENT_GLOBAL_Y )
+    {
+        orient = vec3d( 0, 1.0, 0 );
+    }
+    else if ( m_FeaOrientationType == vsp::FEA_ORIENT_GLOBAL_Z )
+    {
+        orient = vec3d( 0, 0, 1.0 );
+    }
+
+    return orient;
 }

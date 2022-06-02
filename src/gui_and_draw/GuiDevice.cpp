@@ -17,6 +17,7 @@
 #include "AdvLinkMgr.h"
 #include "StlHelper.h"
 #include "VspUtil.h"
+#include "StringUtil.h"
 #include <cfloat>  //For DBL_EPSILON
 
 // Xlib.h does a horrible '#define Status int' which causes problems for exprparse.
@@ -27,6 +28,38 @@
 
 using std::max;
 using std::min;
+
+void fltk_unicode_subscripts( string & str )
+{
+    for ( int i = 0 ; i < ( int )str.size() ; i++ )
+    {
+        if ( str[i] == '_' )
+        {
+            int n = str[i+1] - 48;
+            if ( n >= 0 && n <= 9 )
+            {
+                char buf[16];
+                int indx = 0;
+                indx += fl_utf8encode( 8320 + n, &buf[ indx ] );
+                buf[ indx ] = 0;
+                string subscr( buf );
+                str.replace( i, 2, subscr );
+                i++;
+            }
+        }
+    }
+}
+
+void fltk_unicode_plusminus( string & str )
+{
+    char buf[16];
+    int indx = 0;
+    indx += fl_utf8encode( 177, &buf[ indx ] );
+    buf[ indx ] = 0;
+
+    string plusminus( "+-" );
+    StringUtil::replace_all( str, plusminus, buf  );
+}
 
 VspSlider::VspSlider(int x, int y, int w, int h, const char *label ):Fl_Slider(x, y, w, h, label)
 {
@@ -1719,6 +1752,16 @@ int Choice::GetFlag( int indx )
     return 0;
 }
 
+void Choice::SetFlagByVal( int val, int flag )
+{
+    SetFlag( ValToIndex( val ), flag );
+}
+
+int Choice::GetFlagByVal( int val )
+{
+    return GetFlag( ValToIndex( val ) );
+}
+
 void Choice::ClearFlags()
 {
     m_Flags.clear();
@@ -1741,7 +1784,17 @@ void Choice::UpdateItems( bool keepsetting )
         m_Choice->clear();
         for ( int i = 0 ; i < ( int )m_Items.size() ; i++ )
         {
-            m_Choice->add( m_Items[i].c_str(), 0, 0, 0, m_Flags[i] );
+            // Slashes in names create sub-menus.  We don't want those.
+            if ( m_Items[i].find( '/' ) != string::npos )
+            {
+                m_Choice->add( "dummy", 0, 0, 0, m_Flags[i] );
+                // Only way to add strings with slashes is to replace just-added entry.
+                m_Choice->replace( i, m_Items[i].c_str() );
+            }
+            else
+            {
+                m_Choice->add( m_Items[i].c_str(), 0, 0, 0, m_Flags[i] );
+            }
         }
 
         if( keepsetting )
@@ -2050,7 +2103,7 @@ void StringInput::SetTextFont( Fl_Font font )
 //=====================================================================//
 //===========      String Output                            ===========//
 //=====================================================================//
-void StringOutput::Init( VspScreen* screen, Fl_Output* output )
+void StringOutput::Init( VspScreen* screen, Fl_Output* output, Fl_Button* button )
 {
     GuiDevice::Init( screen );
 
@@ -2058,6 +2111,7 @@ void StringOutput::Init( VspScreen* screen, Fl_Output* output )
     m_Output = output;
 
     AddWidget( output );
+    AddWidget( button );
 }
 
 //==== Update ====//

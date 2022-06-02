@@ -57,18 +57,14 @@ void FeaStructure::Update()
 
 void FeaStructure::ParmChanged( Parm* parm_ptr, int type )
 {
-    if ( type == Parm::SET )
-    {
-        m_LateUpdateFlag = true;
-        return;
-    }
-
-    Update();
-
     Vehicle* veh = VehicleMgr.GetVehicle();
     if ( veh )
     {
-        veh->ParmChanged( parm_ptr, type );
+        Geom* geom = veh->FindGeom( m_ParentGeomID );
+        if ( geom  )
+        {
+            geom->ParmChanged( parm_ptr, type );
+        }
     }
 }
 
@@ -246,10 +242,15 @@ FeaPart* FeaStructure::AddFeaPart( int type )
         feaprt = new FeaSliceArray( m_ParentGeomID );
         feaprt->SetName( string( "SliceArray" + std::to_string( m_FeaPartCount ) ) );
     }
+    else if ( type == vsp::FEA_TRIM )
+    {
+        feaprt = new FeaPartTrim( m_ParentGeomID );
+        feaprt->SetName( string( "Trim" + std::to_string( m_FeaPartCount ) ) );
+    }
 
     if ( feaprt )
     {
-        feaprt->m_MainSurfIndx.Set( m_MainSurfIndx );
+        feaprt->m_MainSurfIndx = m_MainSurfIndx;
         AddFeaPart( feaprt );
     }
 
@@ -317,6 +318,20 @@ void FeaStructure::ReorderFeaPart( int ind, int action )
     m_FeaPartVec = new_prt_vec;
 }
 
+//==== Highlight Active FeaParts ====//
+void FeaStructure::HighlightFeaParts( vector < int > active_ind_vec )
+{
+    for ( int i = 0; i < (int)m_FeaPartVec.size(); i++ )
+    {
+        m_FeaPartVec[i]->SetDrawObjHighlight( false ); // Initially no highlight
+    }
+
+    for ( size_t j = 0; j < active_ind_vec.size(); j++ )
+    {
+        m_FeaPartVec[active_ind_vec[j]]->SetDrawObjHighlight( true );
+    }
+}
+
 //==== Highlight Active Subsurface ====//
 void FeaStructure::RecolorFeaSubSurfs( vector < int > active_ind_vec )
 {
@@ -327,12 +342,9 @@ void FeaStructure::RecolorFeaSubSurfs( vector < int > active_ind_vec )
 
     for ( size_t j = 0; j < active_ind_vec.size(); j++ )
     {
-        for ( int i = 0; i < (int)m_FeaSubSurfVec.size(); i++ )
+        if ( active_ind_vec[j] < m_FeaSubSurfVec.size() )
         {
-            if ( i == active_ind_vec[j] )
-            {
-                m_FeaSubSurfVec[i]->SetLineColor( vec3d( 1, 0, 0 ) );
-            }
+            m_FeaSubSurfVec[active_ind_vec[j]]->SetLineColor( vec3d( 1, 0, 0 ) );
         }
     }
 }
@@ -365,6 +377,11 @@ SubSurface* FeaStructure::AddFeaSubSurf( int type )
     {
         ssurf = new SSLineArray( m_ParentGeomID );
         ssurf->SetName( string( "SSLineArray" + to_string( m_FeaSubSurfCount ) ) );
+    }
+    else if ( type == vsp::SS_FINITE_LINE )
+    {
+        ssurf = new SSFiniteLine( m_ParentGeomID );
+        ssurf->SetName( string( "SSFiniteLine" + to_string( m_FeaSubSurfCount ) ) );
     }
 
     if ( ssurf )
@@ -471,13 +488,17 @@ void FeaStructure::UpdateFeaParts()
 {
     for ( unsigned int i = 0; i < m_FeaPartVec.size(); i++ )
     {
-        m_FeaPartVec[i]->UpdateSymmIndex();
-        m_FeaPartVec[i]->Update();
-
-        if ( !FeaPartIsFixPoint( i ) && !FeaPartIsArray( i ) )
+        if ( !FeaPartIsTrim( i ) && !FeaPartIsFixPoint( i ) ) // Update all normal parts first.
         {
-            // Symmetric FixedPoints and Arrays are updated in their respective Update functions
-            m_FeaPartVec[i]->UpdateSymmParts();
+            m_FeaPartVec[ i ]->Update();
+        }
+    }
+
+    for ( unsigned int i = 0; i < m_FeaPartVec.size(); i++ )
+    {
+        if ( FeaPartIsTrim( i ) || FeaPartIsFixPoint( i ) ) // Update all trim and fix point parts on second pass.
+        {
+            m_FeaPartVec[i]->Update();
         }
     }
 }
@@ -507,11 +528,9 @@ vector < FeaPart* > FeaStructure::InitFeaSkin()
             if ( feaskin )
             {
                 feaskin->SetName( string( "Skin" ) );
-                feaskin->m_MainSurfIndx.Set( m_MainSurfIndx );
+                feaskin->m_MainSurfIndx = m_MainSurfIndx;
                 
-                feaskin->UpdateSymmIndex();
                 feaskin->Update();
-                feaskin->UpdateSymmParts();
 
                 m_FeaPartVec.push_back( feaskin );
             }
@@ -542,18 +561,42 @@ string FeaStructure::GetFeaPartName( int ind )
     return name;
 }
 
-bool FeaStructure::FeaPartIsFixPoint( int ind )
+void FeaStructure::FetchAllTrimPlanes( vector < vector < vec3d > > &pt, vector < vector < vec3d > > &norm )
 {
-    FeaPart* fea_part = GetFeaPart( ind );
+    pt.clear();
+    norm.clear();
 
-    if ( fea_part )
+    for ( int i = 0; i < (int)m_FeaPartVec.size(); i++ )
     {
-        if ( fea_part->GetType() == vsp::FEA_FIX_POINT )
+        if ( FeaPartIsTrim( i ) )
         {
-            return true;
+            FeaPartTrim * trim = dynamic_cast< FeaPartTrim * >( m_FeaPartVec[i] );
+
+            if ( trim )
+            {
+                vector < vector < vec3d > > pti;
+                vector < vector < vec3d > > normi;
+
+                trim->FetchTrimPlanes( pti, normi );
+
+                int nadd = pti.size();
+
+                pt.reserve( pt.size() + nadd );
+                norm.reserve( norm.size() + nadd );
+
+                for ( int j = 0; j < nadd; j++ )
+                {
+                    pt.push_back( pti[j] );
+                    norm.push_back( normi[j] );
+                }
+            }
         }
     }
-    return false;
+}
+
+bool FeaStructure::FeaPartIsFixPoint( int ind )
+{
+    return FeaPartIsType( ind, vsp::FEA_FIX_POINT );
 }
 
 int FeaStructure::GetNumFeaFixPoints()
@@ -572,11 +615,26 @@ int FeaStructure::GetNumFeaFixPoints()
 
 bool FeaStructure::FeaPartIsArray( int ind )
 {
+    return FeaPartIsType( ind, vsp::FEA_RIB_ARRAY ) || FeaPartIsType( ind, vsp::FEA_SLICE_ARRAY );
+}
+
+bool FeaStructure::FeaPartIsSkin( int ind )
+{
+    return FeaPartIsType( ind, vsp::FEA_SKIN );
+}
+
+bool FeaStructure::FeaPartIsTrim( int ind )
+{
+    return FeaPartIsType( ind, vsp::FEA_TRIM );
+}
+
+bool FeaStructure::FeaPartIsType( int ind, int type )
+{
     FeaPart* fea_part = GetFeaPart( ind );
 
     if ( fea_part )
     {
-        if ( fea_part->GetType() == vsp::FEA_RIB_ARRAY || fea_part->GetType() == vsp::FEA_SLICE_ARRAY )
+        if ( fea_part->GetType() == type )
         {
             return true;
         }
@@ -855,11 +913,13 @@ FeaPart::FeaPart( const string& geomID, int type )
     m_FeaPartType = type;
     m_ParentGeomID = geomID;
 
-    m_MainSurfIndx.Init( "MainSurfIndx", "FeaPart", this, -1, -1, 1e12 );
-    m_MainSurfIndx.SetDescript( "Surface Index for FeaPart" );
+    m_MainSurfIndx = 0;
 
-    m_IncludedElements.Init( "IncludedElements", "FeaPart", this, vsp::FEA_SHELL, vsp::FEA_SHELL, vsp::FEA_SHELL_AND_BEAM );
+    m_IncludedElements.Init( "IncludedElements", "FeaPart", this, vsp::FEA_SHELL, vsp::FEA_SHELL, vsp::FEA_NUM_ELEMENT_TYPES - 1 );
     m_IncludedElements.SetDescript( "Indicates the FeaElements to be Included for the FeaPart" );
+
+    m_OrientationType.Init( "Orientation", "FeaPart", this, vsp::FEA_ORIENT_PART_U, vsp::FEA_ORIENT_GLOBAL_X, vsp::FEA_NUM_ORIENT_TYPES - 1 );
+    m_OrientationType.SetDescript( "Part material orientation type" );
 
     m_DrawFeaPartFlag.Init( "DrawFeaPartFlag", "FeaPart", this, true, false, true );
     m_DrawFeaPartFlag.SetDescript( "Flag to Draw FeaPart" );
@@ -887,22 +947,130 @@ FeaPart::~FeaPart()
 
 void FeaPart::Update()
 {
+    m_LateUpdateFlag = false;
 
+    UpdateSurface();
+
+    UpdateFlags();
+
+    UpdateOrientation();
+
+    UpdateSymmParts();
+
+    UpdateDrawObjs();
 }
 
-void FeaPart::ParmChanged( Parm* parm_ptr, int type )
+void FeaPart::UpdateFlags()
+{
+    for ( int i = 0; i < m_MainFeaPartSurfVec.size(); i++ )
+    {
+        if ( GetType() == vsp::FEA_SKIN )
+        {
+            m_MainFeaPartSurfVec[ i ].SetSurfCfdType( vsp::CFD_NORMAL );
+        }
+        else
+        {
+            if ( m_IncludedElements() == vsp::FEA_SHELL || m_IncludedElements() == vsp::FEA_SHELL_AND_BEAM )
+            {
+                m_MainFeaPartSurfVec[ i ].SetSurfCfdType( vsp::CFD_STRUCTURE );
+            }
+            else
+            {
+                m_MainFeaPartSurfVec[ i ].SetSurfCfdType( vsp::CFD_STIFFENER );
+            }
+        }
+    }
+}
+
+// Compute the part material orientation after main surface creation, before symmetric surfacecopy and transformations
+// and certainly before a mesh has been created.  Consequently, we do not know the U, V coordinates of element centers
+// required to find the local directions used by NASTRAN in some cases.  Instead, in all cases, we will
+// calculate the part-constant direction used by CalculiX.  This will get transformed as symmetric copies are made.
+void FeaPart::UpdateOrientation()
 {
     Vehicle* veh = VehicleMgr.GetVehicle();
 
-    if ( type == Parm::SET )
+    if ( !veh )
     {
-        m_LateUpdateFlag = true;
         return;
     }
 
+    Geom *parent_geom = veh->FindGeom( m_ParentGeomID );
+
+    if ( !parent_geom )
+    {
+        return;
+    }
+
+    for ( int i = 0; i < m_MainFeaPartSurfVec.size(); i++ )
+    {
+        vec3d orient;
+        if ( m_OrientationType() == vsp::FEA_ORIENT_GLOBAL_X ||
+             m_OrientationType() == vsp::FEA_ORIENT_GLOBAL_Y ||
+             m_OrientationType() == vsp::FEA_ORIENT_GLOBAL_Z )
+        {
+            orient = vec3d( 0, 0, 0 );
+        }
+        else if ( m_OrientationType() == vsp::FEA_ORIENT_COMP_X )
+        {
+            orient = vec3d( 1.0, 0, 0 );
+            Matrix4d model_matrix = parent_geom->getModelMatrix();
+            orient = model_matrix.xformnorm( orient );
+        }
+        else if ( m_OrientationType() == vsp::FEA_ORIENT_COMP_Y )
+        {
+            orient = vec3d( 0, 1.0, 0 );
+            Matrix4d model_matrix = parent_geom->getModelMatrix();
+            orient = model_matrix.xformnorm( orient );
+        }
+        else if ( m_OrientationType() == vsp::FEA_ORIENT_COMP_Z )
+        {
+            orient = vec3d( 0, 0, 1.0 );
+            Matrix4d model_matrix = parent_geom->getModelMatrix();
+            orient = model_matrix.xformnorm( orient );
+        }
+        else if ( m_OrientationType() == vsp::FEA_ORIENT_OML_R ||
+                  m_OrientationType() == vsp::FEA_ORIENT_OML_U ||
+                ( m_OrientationType() == vsp::FEA_ORIENT_PART_U && GetType() == vsp::FEA_SKIN ) )
+        {
+            orient = parent_geom->CompTanR( m_MainSurfIndx, 0.5, 0.25, 0.5 );
+        }
+        else if ( m_OrientationType() == vsp::FEA_ORIENT_OML_S ||
+                  m_OrientationType() == vsp::FEA_ORIENT_OML_V ||
+                ( m_OrientationType() == vsp::FEA_ORIENT_PART_V && GetType() == vsp::FEA_SKIN ) )
+        {
+            orient = parent_geom->CompTanS( m_MainSurfIndx, 0.5, 0.25, 0.5 );
+        }
+        else if ( m_OrientationType() == vsp::FEA_ORIENT_OML_T )
+        {
+            orient = parent_geom->CompTanT( m_MainSurfIndx, 0.5, 0.25, 0.5 );
+        }
+        else if ( m_OrientationType() == vsp::FEA_ORIENT_PART_U )
+        {
+            orient = m_MainFeaPartSurfVec[ i ].CompTanU01( 0.5, 0.5 );
+        }
+        else if ( m_OrientationType() == vsp::FEA_ORIENT_PART_V )
+        {
+            orient = m_MainFeaPartSurfVec[ i ].CompTanW01( 0.5, 0.5 );
+        }
+
+        orient.normalize();
+        m_MainFeaPartSurfVec[ i ].SetFeaOrientation( m_OrientationType(), orient );
+    }
+}
+
+// This should really call FeaStructure::ParmChanged, but there is no clear way to get a pointer to the
+// FeaStructure that contains this FeaPart
+void FeaPart::ParmChanged( Parm* parm_ptr, int type )
+{
+    Vehicle* veh = VehicleMgr.GetVehicle();
     if ( veh )
     {
-        veh->ParmChanged( parm_ptr, type );
+        Geom* geom = veh->FindGeom( m_ParentGeomID );
+        if ( geom  )
+        {
+            geom->ParmChanged( parm_ptr, type );
+        }
     }
 }
 
@@ -935,37 +1103,6 @@ void FeaPart::SetDisplaySuffix( int num )
 
 void FeaPart::UpdateSymmParts()
 {
-    Vehicle* veh = VehicleMgr.GetVehicle();
-
-    if ( veh )
-    {
-        Geom* current_geom = veh->FindGeom( m_ParentGeomID );
-        if ( !current_geom || m_FeaPartSurfVec.size() == 0 )
-        {
-            return;
-        }
-
-        vector< VspSurf > surf_vec;
-        surf_vec = current_geom->GetSurfVecConstRef();
-
-        // Get Symmetric Translation Matrix
-        vector<Matrix4d> transMats = current_geom->GetFeaTransMatVec();
-
-        //==== Apply Transformations ====//
-        for ( int i = 1; i < m_SymmIndexVec.size(); i++ )
-        {
-            m_FeaPartSurfVec[i].Transform( transMats[i] ); // Apply total transformation to main FeaPart surface
-
-            if ( surf_vec[i].GetFlipNormal() != m_FeaPartSurfVec[i].GetFlipNormal() )
-            {
-                m_FeaPartSurfVec[i].FlipNormal();
-            }
-        }
-    }
-}
-
-void FeaPart::UpdateSymmIndex()
-{
     m_SymmIndexVec.clear();
     m_FeaPartSurfVec.clear();
 
@@ -977,15 +1114,50 @@ void FeaPart::UpdateSymmIndex()
 
     Geom* currgeom = veh->FindGeom( m_ParentGeomID );
 
-    if ( currgeom )
+    if ( !currgeom )
     {
-        m_SymmIndexVec = currgeom->GetSymmIndexs( m_MainSurfIndx() );
+        return;
+    }
 
-        int ncopy = currgeom->GetNumSymmCopies();
+    currgeom->GetSymmIndexs( m_MainSurfIndx, m_SymmIndexVec );
 
-        assert( ncopy == m_SymmIndexVec.size() );
+    int nsurf = m_MainFeaPartSurfVec.size();
+    int nsymm = m_SymmIndexVec.size();
 
-        m_FeaPartSurfVec.resize( m_SymmIndexVec.size() );
+    m_FeaPartSurfVec.resize( nsurf * nsymm );
+
+    // Surface vector -- used for checking flipnormal.  Seems wasteful, but it works.
+    vector< VspSurf > surf_vec;
+    surf_vec = currgeom->GetSurfVecConstRef();
+
+    // Translation matrices for all Geom's surfaces.
+    vector<Matrix4d> transMats = currgeom->GetFeaTransMatVec();
+
+    bool flipnormal = surf_vec[ m_MainSurfIndx ].GetFlipNormal();
+
+    for ( size_t i = 0; i < nsurf; i++ )
+    {
+        if ( m_MainFeaPartSurfVec[i].GetFlipNormal() != flipnormal ) // Make sure base copy oriented right.
+        {
+            m_MainFeaPartSurfVec[i].FlipNormal();
+        }
+        m_FeaPartSurfVec[i] = m_MainFeaPartSurfVec[i]; // Initialize first set.
+    }
+
+    for ( size_t i = 0; i < nsurf; i++ )
+    {
+        for ( size_t j = 1; j < nsymm; j++ )
+        {
+            m_FeaPartSurfVec[ nsurf * j + i ] = m_FeaPartSurfVec[ i ]; // Copy from base set.
+
+            flipnormal = surf_vec[ m_SymmIndexVec[j] ].GetFlipNormal();
+            if ( m_FeaPartSurfVec[ nsurf * j + i ].GetFlipNormal() != flipnormal ) // Make sure symmetric copies oriented right.
+            {
+                m_FeaPartSurfVec[ nsurf * j + i ].FlipNormal();
+            }
+
+            m_FeaPartSurfVec[ nsurf * j + i ].Transform( transMats[ m_SymmIndexVec[ j ] ] );
+        }
     }
 }
 
@@ -1023,6 +1195,10 @@ string FeaPart::GetTypeName( int type )
     {
         return string( "Slice_Array" );
     }
+    if ( type == vsp::FEA_TRIM )
+    {
+        return string( "Trim" );
+    }
 
     return string( "NONE" );
 }
@@ -1041,7 +1217,7 @@ void FeaPart::FetchFeaXFerSurf( vector< XferSurf > &xfersurfs, int compid, const
     for ( int p = 0; p < m_FeaPartSurfVec.size(); p++ )
     {
         // CFD_STRUCTURE and CFD_STIFFENER type surfaces have m_CompID starting at -9999
-        m_FeaPartSurfVec[p].FetchXFerSurf( m_ParentGeomID, m_MainSurfIndx(), compid, xfersurfs, usuppress, wsuppress );
+        m_FeaPartSurfVec[p].FetchXFerSurf( m_ParentGeomID, m_MainSurfIndx, compid, p, xfersurfs, usuppress, wsuppress );
     }
 }
 
@@ -1057,53 +1233,52 @@ void FeaPart::LoadDrawObjs( std::vector< DrawObj* > & draw_obj_vec )
 {
     for ( int i = 0; i < (int)m_FeaPartDO.size(); i++ )
     {
-        draw_obj_vec.push_back( &m_FeaPartDO[i] );
+        draw_obj_vec.push_back( &m_FeaPartDO[ i ] );
+    }
+
+    for ( int i = 0; i < (int)m_FeaHighlightDO.size(); i++ )
+    {
+        draw_obj_vec.push_back( &m_FeaHighlightDO[i] );
     }
 }
 
-void FeaPart::UpdateDrawObjs( int id, bool highlight )
+void FeaPart::UpdateDrawObjs()
 {
     // 2 DrawObj per FeaPart: One for the planar surface and the other for the outline. This is done to avoid
     //  OpenGL transparency ordering issues. 
     m_FeaPartDO.clear();
-    m_FeaPartDO.resize( 2 * m_FeaPartSurfVec.size() );
+    m_FeaPartDO.resize( m_FeaPartSurfVec.size() );
+    m_FeaHighlightDO.clear();
+    m_FeaHighlightDO.resize( m_FeaPartSurfVec.size() );
 
-    for ( unsigned int j = 0; j < 2 * m_FeaPartSurfVec.size(); j += 2 )
+    for ( unsigned int j = 0; j < m_FeaPartSurfVec.size(); j++ )
     {
-        m_FeaPartDO[j].m_GeomID = string( m_Name + "_" + std::to_string( id ) + "_" + std::to_string( j ) );
+        m_FeaPartDO[j].m_GeomID = string( GetID() + "_" + std::to_string( j ) + "_" + m_Name );
         m_FeaPartDO[j].m_Screen = DrawObj::VSP_MAIN_SCREEN;
 
-        m_FeaPartDO[j + 1].m_GeomID = string( m_Name + "_" + std::to_string( id ) + "_" + std::to_string( j + 1 ) );
-        m_FeaPartDO[j + 1].m_Screen = DrawObj::VSP_MAIN_SCREEN;
+        m_FeaHighlightDO[j].m_GeomID = string( GetID() + "_hl_" + std::to_string( j ) + "_" + m_Name );
+        m_FeaHighlightDO[j].m_Screen = DrawObj::VSP_MAIN_SCREEN;
 
-        if ( highlight )
-        {
-            m_FeaPartDO[j + 1].m_LineColor = vec3d( 1.0, 0.0, 0.0 );
-            m_FeaPartDO[j + 1].m_LineWidth = 3.0;
-        }
-        else
-        {
-            m_FeaPartDO[j + 1].m_LineColor = vec3d( 96.0 / 255.0, 96.0 / 255.0, 96.0 / 255.0 );
-            m_FeaPartDO[j + 1].m_LineWidth = 1.0;
-        }
+        m_FeaHighlightDO[j].m_LineColor = vec3d( 96.0 / 255.0, 96.0 / 255.0, 96.0 / 255.0 );
+        m_FeaHighlightDO[j].m_LineWidth = 1.0;
 
         m_FeaPartDO[j].m_Type = DrawObj::VSP_SHADED_QUADS;
-        m_FeaPartDO[j + 1].m_Type = DrawObj::VSP_LINE_LOOP;
+        m_FeaHighlightDO[j].m_Type = DrawObj::VSP_LINE_LOOP;
 
-        vec3d p00 = m_FeaPartSurfVec[j / 2].CompPnt01( 0, 0 );
-        vec3d p10 = m_FeaPartSurfVec[j / 2].CompPnt01( 1, 0 );
-        vec3d p11 = m_FeaPartSurfVec[j / 2].CompPnt01( 1, 1 );
-        vec3d p01 = m_FeaPartSurfVec[j / 2].CompPnt01( 0, 1 );
+        vec3d p00 = m_FeaPartSurfVec[j].CompPnt01( 0, 0 );
+        vec3d p10 = m_FeaPartSurfVec[j].CompPnt01( 1, 0 );
+        vec3d p11 = m_FeaPartSurfVec[j].CompPnt01( 1, 1 );
+        vec3d p01 = m_FeaPartSurfVec[j].CompPnt01( 0, 1 );
 
         m_FeaPartDO[j].m_PntVec.push_back( p00 );
         m_FeaPartDO[j].m_PntVec.push_back( p10 );
         m_FeaPartDO[j].m_PntVec.push_back( p11 );
         m_FeaPartDO[j].m_PntVec.push_back( p01 );
 
-        m_FeaPartDO[j + 1].m_PntVec.push_back( p00 );
-        m_FeaPartDO[j + 1].m_PntVec.push_back( p10 );
-        m_FeaPartDO[j + 1].m_PntVec.push_back( p11 );
-        m_FeaPartDO[j + 1].m_PntVec.push_back( p01 );
+        m_FeaHighlightDO[j].m_PntVec.push_back( p00 );
+        m_FeaHighlightDO[j].m_PntVec.push_back( p10 );
+        m_FeaHighlightDO[j].m_PntVec.push_back( p11 );
+        m_FeaHighlightDO[j].m_PntVec.push_back( p01 );
 
         // Get new normal
         vec3d quadnorm = cross( p10 - p00, p01 - p00 );
@@ -1123,19 +1298,42 @@ void FeaPart::UpdateDrawObjs( int id, bool highlight )
             m_FeaPartDO[j].m_MaterialInfo.Emission[i] = 0.0f;
         }
 
-        if ( highlight )
-        {
-            m_FeaPartDO[j].m_MaterialInfo.Diffuse[3] = 0.67f;
-        }
-        else
-        {
-            m_FeaPartDO[j].m_MaterialInfo.Diffuse[3] = 0.33f;
-        }
+        m_FeaPartDO[j].m_MaterialInfo.Diffuse[3] = 0.33f;
 
         m_FeaPartDO[j].m_MaterialInfo.Shininess = 5.0f;
 
         m_FeaPartDO[j].m_GeomChanged = true;
-        m_FeaPartDO[j+ 1].m_GeomChanged = true;
+        m_FeaHighlightDO[j].m_GeomChanged = true;
+    }
+}
+
+void FeaPart::SetDrawObjHighlight( bool highlight )
+{
+    if ( highlight )
+    {
+        for ( unsigned int j = 0; j < m_FeaHighlightDO.size(); j++ )
+        {
+            m_FeaHighlightDO[j].m_LineColor = vec3d( 1.0, 0.0, 0.0 );
+            m_FeaHighlightDO[j].m_LineWidth = 3.0;
+        }
+
+        for ( unsigned int j = 0; j < m_FeaPartDO.size(); j++ )
+        {
+            m_FeaPartDO[j].m_MaterialInfo.Diffuse[3] = 0.67f;
+        }
+    }
+    else
+    {
+        for ( unsigned int j = 0; j < m_FeaHighlightDO.size(); j++ )
+        {
+            m_FeaHighlightDO[j].m_LineColor = vec3d( 96.0 / 255.0, 96.0 / 255.0, 96.0 / 255.0 );
+            m_FeaHighlightDO[j].m_LineWidth = 1.0;
+        }
+
+        for ( unsigned int j = 0; j < m_FeaPartDO.size(); j++ )
+        {
+            m_FeaPartDO[j].m_MaterialInfo.Diffuse[3] = 0.33f;
+        }
     }
 }
 
@@ -1170,7 +1368,7 @@ VspSurf* FeaPart::GetMainSurf()
         Geom *currgeom = veh->FindGeom( m_ParentGeomID );
         if ( currgeom )
         {
-            retsurf = currgeom->GetSurfPtr( m_MainSurfIndx() );
+            retsurf = currgeom->GetSurfPtr( m_MainSurfIndx );
         }
     }
     return retsurf;
@@ -1234,22 +1432,14 @@ FeaSlice::FeaSlice( const string& geomID, int type ) : FeaPart( geomID, type )
     m_ZRot.SetDescript( "Rotation About Slice Z Axis" );
 }
 
-void FeaSlice::Update()
+void FeaSlice::UpdateSurface()
 {
     UpdateParmLimits();
 
-    // Must call UpdateSymmIndex before
-    if ( m_FeaPartSurfVec.size() > 0 )
-    {
-        m_FeaPartSurfVec[0] = ComputeSliceSurf();
+    m_MainFeaPartSurfVec.clear();
+    m_MainFeaPartSurfVec.resize( 1 );
 
-        // Using the primary m_FeaPartSurfVec (index 0) as a reference, setup the symmetric copies to be defined in UpdateSymmParts 
-        for ( unsigned int j = 1; j < m_SymmIndexVec.size(); j++ )
-        {
-            m_FeaPartSurfVec[j] = m_FeaPartSurfVec[j - 1];
-        }
-    }
-    // Must call UpdateSymmParts next
+    m_MainFeaPartSurfVec[0] = ComputeSliceSurf();
 }
 
 void FeaSlice::UpdateParmLimits()
@@ -1271,7 +1461,7 @@ void FeaSlice::UpdateParmLimits()
         Matrix4d model_matrix = current_geom->getModelMatrix();
         model_matrix.affineInverse();
 
-        VspSurf orig_surf = surf_vec[m_MainSurfIndx()];
+        VspSurf orig_surf = surf_vec[m_MainSurfIndx];
         orig_surf.Transform( model_matrix );
 
         if ( RefFrameIsBody( m_OrientationPlane() ) )
@@ -1280,7 +1470,7 @@ void FeaSlice::UpdateParmLimits()
         }
         else
         {
-            surf_vec[m_MainSurfIndx()].GetBoundingBox( m_SectBBox );
+            surf_vec[m_MainSurfIndx].GetBoundingBox( m_SectBBox );
         }
 
         double perp_dist = 0.0; // Total distance perpendicular to the FeaSlice plane
@@ -1322,7 +1512,7 @@ void FeaSlice::UpdateParmLimits()
         {
             // Build conformal spine from parent geom
             ConformalSpine cs;
-            cs.Build( surf_vec[m_MainSurfIndx()] );
+            cs.Build( surf_vec[m_MainSurfIndx] );
 
             perp_dist = cs.GetSpineLength();
         }
@@ -1355,9 +1545,9 @@ void FeaSlice::UpdateParmLimits()
         {
             // Build conformal spine from parent geom
             ConformalSpine cs;
-            cs.Build( surf_vec[m_MainSurfIndx()] );
+            cs.Build( surf_vec[m_MainSurfIndx] );
 
-            double u_max = surf_vec[m_MainSurfIndx()].GetUMax();
+            double u_max = surf_vec[m_MainSurfIndx].GetUMax();
             double spine_length = cs.GetSpineLength();
             double length_on_spine = m_RelCenterLocation() * spine_length;
             double per_u = cs.FindUGivenLengthAlongSpine( length_on_spine ) / u_max;
@@ -1385,23 +1575,14 @@ VspSurf FeaSlice::ComputeSliceSurf()
 
         slice_surf = VspSurf(); // Create primary VspSurf
 
-        if ( m_IncludedElements() == vsp::FEA_SHELL || m_IncludedElements() == vsp::FEA_SHELL_AND_BEAM )
-        {
-            slice_surf.SetSurfCfdType( vsp::CFD_STRUCTURE );
-        }
-        else
-        {
-            slice_surf.SetSurfCfdType( vsp::CFD_STIFFENER );
-        }
-
         // Determine BndBox dimensions prior to rotating and translating
         Matrix4d model_matrix = current_geom->getModelMatrix();
         model_matrix.affineInverse();
 
-        VspSurf orig_surf = surf_vec[m_MainSurfIndx()];
+        VspSurf orig_surf = surf_vec[m_MainSurfIndx];
         orig_surf.Transform( model_matrix );
 
-        double u_max = surf_vec[m_MainSurfIndx()].GetUMax();
+        double u_max = surf_vec[m_MainSurfIndx].GetUMax();
 
         vec3d geom_center, cornerA, cornerB, cornerC, cornerD, x_axis, y_axis, z_axis,
             center_to_A, center_to_B, center_to_C, center_to_D;
@@ -1427,7 +1608,7 @@ VspSurf FeaSlice::ComputeSliceSurf()
         {
             // Build conformal spine from parent geom
             ConformalSpine cs;
-            cs.Build( surf_vec[m_MainSurfIndx()] );
+            cs.Build( surf_vec[m_MainSurfIndx] );
 
             double spine_length = cs.GetSpineLength();
 
@@ -1451,7 +1632,7 @@ VspSurf FeaSlice::ComputeSliceSurf()
             x_axis = delta_u_center - m_Center;
             x_axis.normalize();
 
-            vec3d surf_pnt1 = surf_vec[m_MainSurfIndx()].CompPnt01( per_u, 0.0 );
+            vec3d surf_pnt1 = surf_vec[m_MainSurfIndx].CompPnt01( per_u, 0.0 );
 
             z_axis = surf_pnt1 - m_Center;
             z_axis.normalize();
@@ -1460,7 +1641,7 @@ VspSurf FeaSlice::ComputeSliceSurf()
             y_axis.normalize();
 
             VspCurve u_curve;
-            surf_vec[m_MainSurfIndx()].GetU01ConstCurve( u_curve, per_u );
+            surf_vec[m_MainSurfIndx].GetU01ConstCurve( u_curve, per_u );
 
             BndBox xsec_box;
             u_curve.GetBoundingBox( xsec_box );
@@ -1793,7 +1974,7 @@ VspSurf FeaSlice::ComputeSliceSurf()
         }
 
         // Make Planar Surface
-        slice_surf.MakePlaneSurf( cornerA, cornerB, cornerC, cornerD );
+        slice_surf.MakePlaneSurf( cornerA, cornerB, cornerC, cornerD, 1.1 );
 
         // Translate to the origin, rotate, and translate back to m_CenterPerBBoxLocation
         Matrix4d trans_mat_1, trans_mat_2, rot_mat_x, rot_mat_y, rot_mat_z;
@@ -1829,11 +2010,6 @@ VspSurf FeaSlice::ComputeSliceSurf()
     return slice_surf;
 }
 
-void FeaSlice::UpdateDrawObjs( int id, bool highlight )
-{
-    FeaPart::UpdateDrawObjs( id, highlight );
-}
-
 //////////////////////////////////////////////////////
 //===================== FeaSpar ====================//
 //////////////////////////////////////////////////////
@@ -1865,7 +2041,7 @@ FeaSpar::FeaSpar( const string& geomID, int type ) : FeaSlice( geomID, type )
     m_PercentTipChord.SetDescript( "Starting Location of the Spar as Percentage of Tip Chord" );
 }
 
-void FeaSpar::Update()
+void FeaSpar::UpdateSurface()
 {
     UpdateParms();
     ComputePlanarSurf();
@@ -1879,7 +2055,7 @@ void FeaSpar::UpdateParms()
     {
         Geom* current_wing = veh->FindGeom( m_ParentGeomID );
 
-        if ( !current_wing || m_FeaPartSurfVec.size() == 0 )
+        if ( !current_wing )
         {
             return;
         }
@@ -1891,7 +2067,7 @@ void FeaSpar::UpdateParms()
         surf_vec = current_wing->GetSurfVecConstRef();
 
         int num_wing_sec = wing->NumXSec();
-        double U_max = surf_vec[m_MainSurfIndx()].GetUMax();
+        double U_max = surf_vec[m_MainSurfIndx].GetUMax();
 
         m_StartWingSection.SetLowerUpperLimits( 1, m_EndWingSection() );
         m_EndWingSection.SetLowerUpperLimits( m_StartWingSection(), num_wing_sec - 1 );
@@ -1932,7 +2108,7 @@ void FeaSpar::UpdateParms()
 
         double u_mid = ( ( m_U_sec_min + m_U_sec_max ) / 2 ) / U_max;
 
-        double chord_length = dist( surf_vec[m_MainSurfIndx()].CompPnt01( u_mid, 0.5 ), surf_vec[m_MainSurfIndx()].CompPnt01( u_mid, 0.0 ) ); // average chord length
+        double chord_length = dist( surf_vec[m_MainSurfIndx].CompPnt01( u_mid, 0.5 ), surf_vec[m_MainSurfIndx].CompPnt01( u_mid, 0.0 ) ); // average chord length
 
         if ( m_AbsRelParmFlag() == vsp::REL )
         {
@@ -1950,16 +2126,19 @@ void FeaSpar::ComputePlanarSurf()
 {
     Vehicle* veh = VehicleMgr.GetVehicle();
 
+    m_MainFeaPartSurfVec.clear();
+    m_MainFeaPartSurfVec.resize( 1 );
+
     if ( veh )
     {
         Geom* current_wing = veh->FindGeom( m_ParentGeomID );
 
-        if ( !current_wing || m_FeaPartSurfVec.size() == 0 )
+        if ( !current_wing )
         {
             return;
         }
 
-        m_FeaPartSurfVec[0] = VspSurf(); // Create primary VspSurf
+        m_MainFeaPartSurfVec[0] = VspSurf(); // Create primary VspSurf
 
         WingGeom* wing = dynamic_cast<WingGeom*>( current_wing );
         assert( wing );
@@ -1971,7 +2150,7 @@ void FeaSpar::ComputePlanarSurf()
         Matrix4d model_matrix = current_wing->getModelMatrix();
         model_matrix.affineInverse();
 
-        VspSurf orig_surf = surf_vec[m_MainSurfIndx()];
+        VspSurf orig_surf = surf_vec[m_MainSurfIndx];
         orig_surf.Transform( model_matrix );
 
         BndBox wing_bbox;
@@ -2015,15 +2194,11 @@ void FeaSpar::ComputePlanarSurf()
 
         double length_spar_0 = dist( inside_edge_pnt, outside_edge_pnt ) / 2; // Initial spar half length
 
-        // Find two points slightly above and below the trailing edge
-        double V_trail_edge_low = V_min + 2 * TMAGIC;
-        double V_trail_edge_up = V_max - 2 * TMAGIC;
+        vec3d foil_mid_up, foil_mid_low;
+        foil_mid_up = orig_surf.CompPnt01( u_mid, 0.75 );
+        foil_mid_low = orig_surf.CompPnt01( u_mid, 0.25 );
 
-        vec3d trail_edge_up, trail_edge_low;
-        trail_edge_up = orig_surf.CompPnt01( u_mid, V_trail_edge_low / V_max );
-        trail_edge_low = orig_surf.CompPnt01( u_mid, V_trail_edge_up / V_max );
-
-        vec3d wing_z_axis = trail_edge_up - trail_edge_low;
+        vec3d wing_z_axis = foil_mid_up - foil_mid_low;
         wing_z_axis.normalize();
 
         // Identify expansion 
@@ -2166,7 +2341,7 @@ void FeaSpar::ComputePlanarSurf()
                 double rel_center_location = ( center.x() - sect_bbox.GetMin( 0 ) ) / ( sect_bbox.GetMax( 0 ) - sect_bbox.GetMin( 0 ) );
                 temp_slice->m_RelCenterLocation.Set( rel_center_location );
 
-                m_FeaPartSurfVec[0] = temp_slice->ComputeSliceSurf();
+                m_MainFeaPartSurfVec[0] = temp_slice->ComputeSliceSurf();
 
                 delete temp_slice;
             }
@@ -2324,39 +2499,13 @@ void FeaSpar::ComputePlanarSurf()
             cornerD = outside_edge_f - ( height * wing_z_axis );
 
             // Make Planar Surface
-            m_FeaPartSurfVec[0].MakePlaneSurf( cornerA, cornerB, cornerC, cornerD );
+            m_MainFeaPartSurfVec[0].MakePlaneSurf( cornerA, cornerB, cornerC, cornerD );
 
             // Transform to body coordinate frame
             model_matrix.affineInverse();
-            m_FeaPartSurfVec[0].Transform( model_matrix );
-        }
-
-        // Set Surface CFD Type: 
-        if ( m_IncludedElements() == vsp::FEA_SHELL || m_IncludedElements() == vsp::FEA_SHELL_AND_BEAM )
-        {
-            m_FeaPartSurfVec[0].SetSurfCfdType( vsp::CFD_STRUCTURE );
-        }
-        else
-        {
-            m_FeaPartSurfVec[0].SetSurfCfdType( vsp::CFD_STIFFENER );
-        }
-
-        if ( m_FeaPartSurfVec[0].GetFlipNormal() != surf_vec[m_MainSurfIndx()].GetFlipNormal() )
-        {
-            m_FeaPartSurfVec[0].FlipNormal();
-        }
-
-        // Using the primary m_FeaPartSurfVec (index 0) as a reference, setup the symmetric copies to be defined in UpdateSymmParts 
-        for ( unsigned int j = 1; j < m_SymmIndexVec.size(); j++ )
-        {
-            m_FeaPartSurfVec[j] = m_FeaPartSurfVec[j - 1];
+            m_MainFeaPartSurfVec[0].Transform( model_matrix );
         }
     }
-}
-
-void FeaSpar::UpdateDrawObjs( int id, bool highlight )
-{
-    FeaPart::UpdateDrawObjs( id, highlight );
 }
 
 //////////////////////////////////////////////////////
@@ -2387,23 +2536,15 @@ FeaRib::FeaRib( const string& geomID, int type ) : FeaSlice( geomID, type )
     m_MatchDihedralFlag.SetDescript( "Flag to Rotate the Rib with the Dihedral Angle of the Wing" );
 }
 
-void FeaRib::Update()
+void FeaRib::UpdateSurface()
 {
     UpdateParmLimits();
 
-    // Must call UpdateSymmIndex before
-    if ( m_FeaPartSurfVec.size() > 0 )
-    {
-        GetRibPerU();
-        m_FeaPartSurfVec[0] = ComputeRibSurf();
+    m_MainFeaPartSurfVec.clear();
+    m_MainFeaPartSurfVec.resize( 1 );
 
-        // Using the primary m_FeaPartSurfVec (index 0) as a reference, setup the symmetric copies to be defined in UpdateSymmParts 
-        for ( unsigned int j = 1; j < m_SymmIndexVec.size(); j++ )
-        {
-            m_FeaPartSurfVec[j] = m_FeaPartSurfVec[j - 1];
-        }
-    }
-    // Must call UpdateSymmParts next
+    GetRibPerU();
+    m_MainFeaPartSurfVec[0] = ComputeRibSurf();
 }
 
 void FeaRib::UpdateParmLimits()
@@ -2538,7 +2679,7 @@ double FeaRib::GetRibPerU( )
             vector < double > wing_sec_span_vec; // Vector of wing span increasing by each wing section (first section has no length)
             wing_sec_span_vec.push_back( 0.0 );
 
-            double U_max = surf_vec[m_MainSurfIndx()].GetUMax();
+            double U_max = surf_vec[m_MainSurfIndx].GetUMax();
 
             // Init values:
             double span_0 = 0.0;
@@ -2641,7 +2782,7 @@ double FeaRib::GetRibTotalRotation( )
             Matrix4d model_matrix = current_wing->getModelMatrix();
             model_matrix.affineInverse();
 
-            VspSurf orig_surf = surf_vec[m_MainSurfIndx()];
+            VspSurf orig_surf = surf_vec[m_MainSurfIndx];
             orig_surf.Transform( model_matrix );
 
             // Find initial rotation (alpha) to perpendicular edge or spar
@@ -2733,7 +2874,7 @@ VspSurf FeaRib::ComputeRibSurf()
         Matrix4d model_matrix = wing->getModelMatrix();
         model_matrix.affineInverse();
 
-        VspSurf orig_surf = surf_vec[m_MainSurfIndx()];
+        VspSurf orig_surf = surf_vec[m_MainSurfIndx];
         orig_surf.Transform( model_matrix );
 
         BndBox wing_bbox;
@@ -3024,7 +3165,7 @@ VspSurf FeaRib::ComputeRibSurf()
             cornerD = lead_edge_f - ( height * wing_z_axis );
 
             // Make Planar Surface
-            rib_surf.MakePlaneSurf( cornerA, cornerB, cornerC, cornerD );
+            rib_surf.MakePlaneSurf( cornerA, cornerB, cornerC, cornerD, 1.1 );
 
             // Translate to the origin, rotate, and translate back to center
             Matrix4d trans_rot_mat;
@@ -3045,29 +3186,9 @@ VspSurf FeaRib::ComputeRibSurf()
             model_matrix.affineInverse();
             rib_surf.Transform( model_matrix );
         }
-
-        // Set Surface CFD Type: 
-        if ( m_IncludedElements() == vsp::FEA_SHELL || m_IncludedElements() == vsp::FEA_SHELL_AND_BEAM )
-        {
-            rib_surf.SetSurfCfdType( vsp::CFD_STRUCTURE );
-        }
-        else
-        {
-            rib_surf.SetSurfCfdType( vsp::CFD_STIFFENER );
-        }
-
-        if ( rib_surf.GetFlipNormal() != surf_vec[m_MainSurfIndx()].GetFlipNormal() )
-        {
-            rib_surf.FlipNormal();
-        }
     }
 
     return rib_surf;
-}
-
-void FeaRib::UpdateDrawObjs( int id, bool highlight )
-{
-    FeaPart::UpdateDrawObjs( id, highlight );
 }
 
 ////////////////////////////////////////////////////
@@ -3079,10 +3200,10 @@ FeaFixPoint::FeaFixPoint( const string& compID, const string& partID, int type )
     m_ParentFeaPartID = partID;
 
     m_PosU.Init( "PosU", "FeaFixPoint", this, 0.0, 0.0, 1.0 );
-    m_PosU.SetDescript( "Precent U Location" );
+    m_PosU.SetDescript( "Percent U Location" );
 
     m_PosW.Init( "PosW", "FeaFixPoint", this, 0.0, 0.0, 1.0 );
-    m_PosW.SetDescript( "Precent W Location" );
+    m_PosW.SetDescript( "Percent W Location" );
 
     m_FixPointMassFlag.Init( "FixPointMassFlag", "FeaFixPoint", this, false, false, true );
     m_FixPointMassFlag.SetDescript( "Flag to Include Mass of FeaFixPoint" );
@@ -3092,12 +3213,11 @@ FeaFixPoint::FeaFixPoint( const string& compID, const string& partID, int type )
 
     m_FeaPropertyIndex = -1; // No property
     m_CapFeaPropertyIndex = -1; // No property
-    m_BorderFlag = false;
 }
 
-void FeaFixPoint::Update()
+void FeaFixPoint::UpdateSurface()
 {
-    m_FeaPartSurfVec.clear(); // FeaFixPoints are not a VspSurf
+    m_MainFeaPartSurfVec.clear(); // FeaFixPoints are not a VspSurf
 }
 
 bool FeaFixPoint::PlaneAtYZero( piecewise_surface_type & surface ) const
@@ -3166,136 +3286,6 @@ bool FeaFixPoint::LessThanY( piecewise_surface_type & surface, double val ) cons
     return true;
 }
 
-void FeaFixPoint::IdentifySplitSurfIndex( bool half_mesh_flag, const vector < double > &usuppress, const vector < double > &wsuppress )
-{
-    // This function is called instead of FeaPart::FetchFeaXFerSurf when the FeaPart type is FEA_FIX_POINT, since 
-    //  FeaFixPoints are not surfaces. This function determines the number of split surfaces for the FeaFixPoint 
-    //  Parent Surface, and determines which split surface the FeaFixPoint lies on.
-
-    FeaPart* parent_part = StructureMgr.GetFeaPart( m_ParentFeaPartID );
-    Vehicle* veh = VehicleMgr.GetVehicle();
-
-    if ( !parent_part || !veh )
-    {
-        return;
-    }
-
-    vector < VspSurf > parent_surf_vec = parent_part->GetFeaPartSurfVec();
-
-    m_SplitSurfIndex.clear();
-    m_SplitSurfIndex.resize( parent_surf_vec.size() );
-
-    for ( size_t i = 0; i < parent_surf_vec.size(); i++ )
-    {
-        // Get FeaFixPoint U/W values
-        vec2d uw = GetUW();
-
-        double parent_Umax = parent_surf_vec[i].GetUMax();
-        double parent_Wmax = parent_surf_vec[i].GetWMax();
-        double parent_Wmin = 0.0;
-        double parent_Umin = 0.0;
-
-        // Check if U/W is closed, in which case the minimum and maximum U/W will be at the same point
-        bool closedU = parent_surf_vec[i].IsClosedU();
-        bool closedW = parent_surf_vec[i].IsClosedW();
-
-        // Split the parent surface
-        vector< XferSurf > tempxfersurfs;
-        parent_surf_vec[i].FetchXFerSurf( m_ParentGeomID, m_MainSurfIndx(), 0, tempxfersurfs, usuppress, wsuppress );
-
-        // Check if the UW point is on a valid patch (invalid patches are discarded in FetchXFerSurf)
-        bool on_valid_patch = false;
-
-        int num_split_surfs = tempxfersurfs.size();
-
-        // Check if the UW point is on a valid patch (invalid patches are discarded in FetchXFerSurf)
-        for ( size_t j = 0; j < num_split_surfs; j++ )
-        {
-            double umin = tempxfersurfs[j].m_Surface.get_u0();
-            double umax = tempxfersurfs[j].m_Surface.get_umax();
-            double vmin = tempxfersurfs[j].m_Surface.get_v0();
-            double vmax = tempxfersurfs[j].m_Surface.get_vmax();
-
-            if ( uw[1] >= vmin && uw[1] <= vmax && uw[0] >= umin && uw[0] <= umax )
-            {
-                on_valid_patch = true; // The point is on the patch
-            }
-        }
-
-        for ( size_t j = 0; j < num_split_surfs; j++ )
-        {
-            bool addSurfFlag = true;
-
-            if ( half_mesh_flag && LessThanY( tempxfersurfs[j].m_Surface, 1e-6 ) )
-            {
-                addSurfFlag = false;
-            }
-
-            if ( half_mesh_flag && PlaneAtYZero( tempxfersurfs[j].m_Surface ) )
-            {
-                addSurfFlag = false;
-            }
-
-            if ( addSurfFlag )
-            {
-                double umax = tempxfersurfs[j].m_Surface.get_umax();
-                double umin = tempxfersurfs[j].m_Surface.get_u0();
-                double vmax = tempxfersurfs[j].m_Surface.get_vmax();
-                double vmin = tempxfersurfs[j].m_Surface.get_v0();
-
-                if ( parent_surf_vec[i].IsMagicVParm() && !on_valid_patch )
-                {
-                    vmin -= TMAGIC;
-                    vmax += TMAGIC;
-                }
-
-                // Check if FeaFixPoint is on XferSurf or border curve. Note: Not all cases of FeaFixPoints on constant UW intersection curves 
-                //  are checked, since a node will always be placed there automatically
-                if ( uw.x() > umin && uw.x() < umax && uw.y() > vmin && uw.y() < vmax ) // FeaFixPoint on surface
-                {
-                    m_SplitSurfIndex[i].push_back( j + i * num_split_surfs );
-                    m_BorderFlag = false;
-                }
-                else if ( ( uw.x() > umin && uw.x() < umax ) && ( uw.y() == vmin || uw.y() == vmax ) ) // FeaFixPoint on constant W border
-                {
-                    m_SplitSurfIndex[i].push_back( j + i * num_split_surfs );
-                    m_BorderFlag = true;
-                }
-                else if ( ( uw.x() == umin || uw.x() == umax ) && ( uw.y() > vmin && uw.y() < vmax ) ) // FeaFixPoint on constant U border
-                {
-                    m_SplitSurfIndex[i].push_back( j + i * num_split_surfs );
-                    m_BorderFlag = true;
-                }
-                else if ( ( uw.x() == umin || uw.x() == umax ) && ( uw.y() == vmin || uw.y() == vmax ) ) // FeaFixPoint on constant UW intersection (already a node)
-                {
-                    m_SplitSurfIndex[i].push_back( j + i * num_split_surfs );
-                    m_BorderFlag = true;
-                }
-                else if ( ( closedU && umax == parent_Umax && uw.x() == parent_Umin ) && ( uw.y() > vmin && uw.y() < vmax ) ) // FeaFixPoint on constant closedU border 
-                {
-                    m_SplitSurfIndex[i].push_back( j + i * num_split_surfs );
-                    m_BorderFlag = true;
-                }
-                else if ( ( closedU && umin == parent_Umin && uw.y() == parent_Umax ) && ( uw.y() > vmin && uw.y() < vmax ) ) // FeaFixPoint on constant closedU border
-                {
-                    m_SplitSurfIndex[i].push_back( j + i * num_split_surfs );
-                    m_BorderFlag = true;
-                }
-                else if ( ( uw.x() > umin && uw.x() < umax ) && ( closedW && vmax == parent_Wmax && uw.y() == parent_Wmin ) ) // FeaFixPoint on constant closedW border
-                {
-                    m_SplitSurfIndex[i].push_back( j + i * num_split_surfs );
-                    m_BorderFlag = true;
-                }
-                else if ( ( uw.x() > umin && uw.x() < umax ) && ( closedW && vmin == parent_Wmin && uw.y() == parent_Wmax ) ) // FeaFixPoint on constant closedW border
-                {
-                    m_SplitSurfIndex[i].push_back( j + i * num_split_surfs );
-                    m_BorderFlag = true;
-                }
-            }
-        }
-    }
-}
-
 vector < vec3d > FeaFixPoint::GetPntVec()
 {
     vector < vec3d > pnt_vec;
@@ -3358,33 +3348,25 @@ xmlNodePtr FeaFixPoint::DecodeXml( xmlNodePtr & node )
     return fea_prt_node;
 }
 
-void FeaFixPoint::UpdateDrawObjs( int id, bool highlight )
+void FeaFixPoint::UpdateDrawObjs()
 {
     FeaPart* parent_part = StructureMgr.GetFeaPart( m_ParentFeaPartID );
 
     if ( parent_part )
     {
         vector < VspSurf > parent_surf_vec = parent_part->GetFeaPartSurfVec();
+        m_FeaPartDO.resize( parent_surf_vec.size() );
 
         for ( size_t i = 0; i < parent_surf_vec.size(); i++ )
         {
-            m_FeaPartDO.resize( parent_surf_vec.size() );
-
             m_FeaPartDO[i].m_PntVec.clear();
 
-            m_FeaPartDO[i].m_GeomID = string( "FeaFixPoint_" + std::to_string( id ) + "_" + std::to_string( i ) );
+            m_FeaPartDO[i].m_GeomID = string( GetID() + "_" + std::to_string( i ) + "_FeaFixPoint" );
             m_FeaPartDO[i].m_Screen = DrawObj::VSP_MAIN_SCREEN;
             m_FeaPartDO[i].m_Type = DrawObj::VSP_POINTS;
             m_FeaPartDO[i].m_PointSize = 8.0;
 
-            if ( highlight )
-            {
-                m_FeaPartDO[i].m_PointColor = vec3d( 1.0, 0.0, 0.0 );
-            }
-            else
-            {
-                m_FeaPartDO[i].m_PointColor = vec3d( 0.0, 0.0, 0.0 );
-            }
+            m_FeaPartDO[i].m_PointColor = vec3d( 0.0, 0.0, 0.0 );
 
             vec3d fixpt = parent_surf_vec[i].CompPnt01( m_PosU(), m_PosW() );
             m_FeaPartDO[i].m_PntVec.push_back( fixpt );
@@ -3394,9 +3376,318 @@ void FeaFixPoint::UpdateDrawObjs( int id, bool highlight )
     }
 }
 
+void FeaFixPoint::SetDrawObjHighlight( bool highlight )
+{
+    if ( highlight )
+    {
+        for ( unsigned int j = 0; j < m_FeaPartDO.size(); j++ )
+        {
+            m_FeaPartDO[j].m_PointColor = vec3d( 1.0, 0.0, 0.0 );
+        }
+    }
+    else
+    {
+        for ( unsigned int j = 0; j < m_FeaPartDO.size(); j++ )
+        {
+            m_FeaPartDO[j].m_PointColor = vec3d( 0.0, 0.0, 0.0 );
+        }
+    }
+}
+
 bool FeaFixPoint::PtsOnPlanarPart( const vector < vec3d > & pnts, double minlen, int surf_ind )
 {
     return false;
+}
+
+////////////////////////////////////////////////////
+//================= FeaPartTrim ==================//
+////////////////////////////////////////////////////
+
+FeaPartTrim::FeaPartTrim( const string& geomID, int type ) : FeaPart( geomID, type )
+{
+    m_IncludedElements.Set( vsp::FEA_NO_ELEMENTS );
+
+    m_FeaPropertyIndex = -1; // No property
+    m_CapFeaPropertyIndex = -1; // No property
+}
+
+FeaPartTrim::~FeaPartTrim()
+{
+    Clear();
+}
+
+void FeaPartTrim::Clear()
+{
+    for ( int i = 0; i < m_FlipFlagVec.size(); i++ )
+    {
+        delete m_FlipFlagVec[i];
+    }
+    m_FlipFlagVec.clear();
+
+    m_TrimFeaPartIDVec.clear();
+}
+
+void FeaPartTrim::UpdateSurface()
+{
+    m_MainFeaPartSurfVec.clear(); // FeaFixPoints are not a VspSurf
+}
+
+xmlNodePtr FeaPartTrim::EncodeXml( xmlNodePtr & node )
+{
+    xmlNodePtr part_info = xmlNewChild( node, NULL, BAD_CAST "FeaPartInfo", NULL );
+
+    if ( part_info )
+    {
+        XmlUtil::AddIntNode( part_info, "FeaPartType", m_FeaPartType );
+
+        xmlNodePtr tlist_node = xmlNewChild( part_info, NULL, BAD_CAST "TrimList", NULL );
+        for ( int i = 0 ; i < ( int )m_TrimFeaPartIDVec.size() ; i++ )
+        {
+            xmlNodePtr trim_node = xmlNewChild( tlist_node, NULL, BAD_CAST "TrimPart", NULL );
+            XmlUtil::AddStringNode( trim_node, "ID", m_TrimFeaPartIDVec[i] );
+        }
+
+        ParmContainer::EncodeXml( part_info );
+    }
+
+    return part_info;
+}
+
+xmlNodePtr FeaPartTrim::DecodeXml( xmlNodePtr & node )
+{
+    Clear();
+
+    xmlNodePtr tl_node = XmlUtil::GetNode( node, "TrimList", 0 );
+    int num_trim = XmlUtil::GetNumNames( tl_node, "TrimPart" );
+
+    for ( int i = 0 ; i < num_trim ; i++ )
+    {
+        xmlNodePtr n = XmlUtil::GetNode( tl_node, "TrimPart", i );
+        AddTrimPart( ParmMgr.RemapID( XmlUtil::FindString( n, "ID", string() ) ) );
+    }
+
+    ParmContainer::DecodeXml( node );
+
+    return node;
+}
+
+void FeaPartTrim::UpdateDrawObjs()
+{
+    double axlen = 1.0;
+
+    Vehicle *veh = VehicleMgr.GetVehicle();
+    if ( veh )
+    {
+        axlen = veh->m_AxisLength();
+    }
+
+    DrawObj arrowHeadDO;
+    DrawObj arrowLineDO;
+
+    for ( unsigned int ipart = 0; ipart < m_TrimFeaPartIDVec.size(); ipart++ )
+    {
+        FeaPart* parent_part = StructureMgr.GetFeaPart( m_TrimFeaPartIDVec[ipart] );
+
+        if ( parent_part )
+        {
+            vector < VspSurf > parent_surf_vec = parent_part->GetFeaPartSurfVec();
+
+            for ( size_t i = 0; i < parent_surf_vec.size(); i++ )
+            {
+                VspSurf s = parent_surf_vec[i];
+
+                vec3d cen = s.CompPnt01( 0.5, 0.5 );
+                vec3d dir = s.CompNorm01( 0.5, 0.5 );
+
+                if ( ipart < m_FlipFlagVec.size() )
+                {
+                    if ( m_FlipFlagVec[ ipart ] )
+                    {
+                        if ( m_FlipFlagVec[ ipart ]->Get() )
+                        {
+                            dir = -1.0 * dir;
+                        }
+                    }
+                }
+
+                arrowLineDO.m_PntVec.push_back( cen );
+                arrowLineDO.m_PntVec.push_back( cen + dir * axlen );
+
+                MakeArrowhead( cen + dir * axlen, dir, 0.25 * axlen, arrowHeadDO.m_PntVec );
+
+            }
+        }
+    }
+
+    arrowHeadDO.m_GeomID = m_ID + "Arrows";
+    arrowHeadDO.m_LineWidth = 1.0;
+    arrowHeadDO.m_Type = DrawObj::VSP_SHADED_TRIS;
+    arrowHeadDO.m_NormVec = vector <vec3d> ( arrowHeadDO.m_PntVec.size() );
+
+    for ( int i = 0; i < 3; i++ )
+    {
+        arrowHeadDO.m_MaterialInfo.Ambient[i] = 0.2f;
+        arrowHeadDO.m_MaterialInfo.Diffuse[i] = 0.1f;
+        arrowHeadDO.m_MaterialInfo.Specular[i] = 0.7f;
+        arrowHeadDO.m_MaterialInfo.Emission[i] = 0.0f;
+    }
+    arrowHeadDO.m_MaterialInfo.Diffuse[3] = 0.5;
+    arrowHeadDO.m_MaterialInfo.Shininess = 5.0;
+
+
+    arrowLineDO.m_GeomID = m_ID + "ALines";
+    arrowLineDO.m_Screen = DrawObj::VSP_MAIN_SCREEN;
+    arrowLineDO.m_LineWidth = 2.0;
+    arrowLineDO.m_LineColor = vec3d( 0, 0, 0 );
+    arrowLineDO.m_Type = DrawObj::VSP_LINES;
+
+    arrowLineDO.m_GeomChanged = true;
+    arrowHeadDO.m_GeomChanged = true;
+
+    m_FeaPartDO.clear();
+    m_FeaPartDO.push_back( arrowHeadDO );
+    m_FeaPartDO.push_back( arrowLineDO );
+}
+
+void FeaPartTrim::SetDrawObjHighlight( bool highlight )
+{
+    if ( highlight )
+    {
+        for ( unsigned int j = 0; j < m_FeaPartDO.size(); j++ )
+        {
+            m_FeaPartDO[j].m_LineColor = vec3d( 1.0, 0.0, 0.0 );
+            m_FeaPartDO[j].m_MaterialInfo.Ambient[0] = 1.0;
+        }
+    }
+    else
+    {
+        for ( unsigned int j = 0; j < m_FeaPartDO.size(); j++ )
+        {
+            m_FeaPartDO[j].m_LineColor = vec3d( 0.0, 0.0, 0.0 );
+            m_FeaPartDO[j].m_MaterialInfo.Ambient[0] = 0.2;
+        }
+    }
+}
+
+void FeaPartTrim::FetchTrimPlanes( vector < vector < vec3d > > &pt, vector < vector < vec3d > > &norm )
+{
+    // This nested loop is most naturally accessed with ipart as the outer loop.  However, going forward we will
+    // need pt and norm set up with ipart as the inner loop.  First we loop through to check that the referenced
+    // parts all have the same symmetry (which determines the outer loop size).
+
+    // Determine number of symmetrical copies.
+    int nsymm = -1;
+    bool samesize = true;
+    for ( unsigned int ipart = 0; ipart < m_TrimFeaPartIDVec.size(); ipart++ )
+    {
+        FeaPart *parent_part = StructureMgr.GetFeaPart( m_TrimFeaPartIDVec[ ipart ] );
+
+        if ( parent_part )
+        {
+            vector < VspSurf > parent_surf_vec = parent_part->GetFeaPartSurfVec();
+
+            if ( nsymm < 0 )
+            {
+                nsymm = parent_surf_vec.size();
+            }
+            else
+            {
+                if ( nsymm != parent_surf_vec.size() )
+                {
+                    printf( "Error, parts used by FEA Trim do not have the same number of symmetrical copies\n" );
+                    samesize = false;
+                }
+            }
+        }
+    }
+
+    if ( samesize )
+    {
+        pt.resize( nsymm );
+        norm.resize( nsymm );
+
+        int npart = m_TrimFeaPartIDVec.size();
+
+        for ( size_t isymm = 0; isymm < nsymm; isymm++ )
+        {
+            pt[isymm].resize( npart );
+            norm[isymm].resize( npart );
+
+            for ( unsigned int ipart = 0; ipart < npart; ipart++ )
+            {
+                FeaPart *parent_part = StructureMgr.GetFeaPart( m_TrimFeaPartIDVec[ ipart ] );
+
+                if ( parent_part )
+                {
+                    vector < VspSurf > parent_surf_vec = parent_part->GetFeaPartSurfVec();
+
+                    VspSurf s = parent_surf_vec[isymm];
+
+                    vec3d cen = s.CompPnt01( 0.5, 0.5 );
+                    vec3d dir = s.CompNorm01( 0.5, 0.5 );
+
+                    if ( m_FlipFlagVec[ipart]->Get() )
+                    {
+                        dir = -1.0 * dir;
+                    }
+
+                    pt[isymm][ipart] = cen;
+                    norm[isymm][ipart] = dir;
+                }
+            }
+        }
+    }
+}
+
+bool FeaPartTrim::PtsOnPlanarPart( const vector < vec3d > & pnts, double minlen, int surf_ind )
+{
+    return false;
+}
+
+void FeaPartTrim::AddTrimPart( string partID )
+{
+    BoolParm* bp = dynamic_cast<BoolParm*>( ParmMgr.CreateParm( vsp::PARM_BOOL_TYPE ) );
+    if ( bp )
+    {
+        int i = (int)m_FlipFlagVec.size();
+        char str[15];
+        sprintf( str, "FlipFlag_%d", i );
+        bp->Init( string( str ), "FeaPartTrim", this, false, false, true );
+        bp->SetDescript( "Trim direction flip flag" );
+        m_FlipFlagVec.push_back( bp );
+
+    }
+
+    m_TrimFeaPartIDVec.push_back( partID );
+
+    m_LateUpdateFlag = true;
+    ParmChanged( NULL, Parm::SET_FROM_DEVICE ); // Force update.
+}
+
+void FeaPartTrim::DeleteTrimPart( int indx )
+{
+    if ( indx >= 0 && indx < m_FlipFlagVec.size() )
+    {
+        delete m_FlipFlagVec[ indx ];
+        m_FlipFlagVec.erase( m_FlipFlagVec.begin() + indx );
+
+        m_TrimFeaPartIDVec.erase( m_TrimFeaPartIDVec.begin() + indx );
+
+        RenameParms();
+
+        m_LateUpdateFlag = true;
+        ParmChanged( NULL, Parm::SET_FROM_DEVICE ); // Force update.
+    }
+}
+
+void FeaPartTrim::RenameParms()
+{
+    for ( int i = 0; i < m_FlipFlagVec.size(); i++ )
+    {
+        char str[255];
+        sprintf( str, "FlipFlag_%d", i );
+        m_FlipFlagVec[i]->SetName( string( str ) );
+    }
 }
 
 ////////////////////////////////////////////////////
@@ -3412,7 +3703,7 @@ FeaSkin::FeaSkin( const string& geomID, int type ) : FeaPart( geomID, type )
     m_RemoveSkinFlag.SetDescript( "Flag to Remove Skin Surface and Triangles after Intersections" );
 }
 
-void FeaSkin::Update()
+void FeaSkin::UpdateSurface()
 {
     BuildSkinSurf();
 }
@@ -3420,6 +3711,9 @@ void FeaSkin::Update()
 void FeaSkin::BuildSkinSurf()
 {
     Vehicle* veh = VehicleMgr.GetVehicle();
+
+    m_MainFeaPartSurfVec.clear();
+    m_MainFeaPartSurfVec.resize( 1 );
 
     if ( veh )
     {
@@ -3430,15 +3724,7 @@ void FeaSkin::BuildSkinSurf()
             vector< VspSurf > surf_vec;
             surf_vec = currgeom->GetSurfVecConstRef(  );
 
-            m_FeaPartSurfVec[0] = surf_vec[m_SymmIndexVec[0]];
-
-            m_FeaPartSurfVec[0].SetSurfCfdType( vsp::CFD_NORMAL );
-
-            // Using the primary m_FeaPartSurfVec (index 0) as a reference, calculate and transform the symmetric copies
-            for ( unsigned int j = 1; j < m_SymmIndexVec.size(); j++ )
-            {
-                m_FeaPartSurfVec[j] = m_FeaPartSurfVec[j - 1];
-            }
+            m_MainFeaPartSurfVec[0] = surf_vec[m_MainSurfIndx];
         }
     }
 }
@@ -3491,7 +3777,7 @@ FeaDome::FeaDome( const string& geomID, int type ) : FeaPart( geomID, type )
     m_FlipDirectionFlag.SetDescript( "Flag to Flip the Direction of the FeaDome" );
 }
 
-void FeaDome::Update()
+void FeaDome::UpdateSurface()
 {
     BuildDomeSurf();
 }
@@ -3502,25 +3788,19 @@ void FeaDome::BuildDomeSurf()
 {
     Vehicle* veh = VehicleMgr.GetVehicle();
 
+    m_MainFeaPartSurfVec.clear();
+    m_MainFeaPartSurfVec.resize( 1 );
+
     if ( veh )
     {
         Geom* curr_geom = veh->FindGeom( m_ParentGeomID );
 
-        if ( !curr_geom || m_FeaPartSurfVec.size() == 0 )
+        if ( !curr_geom )
         {
             return;
         }
 
-        m_FeaPartSurfVec[0] = VspSurf(); // Create primary VspSurf
-
-        if ( m_IncludedElements() == vsp::FEA_SHELL || m_IncludedElements() == vsp::FEA_SHELL_AND_BEAM )
-        {
-            m_FeaPartSurfVec[0].SetSurfCfdType( vsp::CFD_STRUCTURE );
-        }
-        else
-        {
-            m_FeaPartSurfVec[0].SetSurfCfdType( vsp::CFD_STIFFENER );
-        }
+        m_MainFeaPartSurfVec[0] = VspSurf(); // Create primary VspSurf
 
         // Build unit circle
         piecewise_curve_type c, c1, c2;
@@ -3554,12 +3834,12 @@ void FeaDome::BuildDomeSurf()
         }
 
         // Revolve to unit sphere
-        m_FeaPartSurfVec[0].CreateBodyRevolution( stringer );
+        m_MainFeaPartSurfVec[0].CreateBodyRevolution( stringer );
 
         // Scale to ellipsoid
-        m_FeaPartSurfVec[0].ScaleX( m_Aradius() );
-        m_FeaPartSurfVec[0].ScaleY( m_Bradius() );
-        m_FeaPartSurfVec[0].ScaleZ( m_Cradius() );
+        m_MainFeaPartSurfVec[0].ScaleX( m_Aradius() );
+        m_MainFeaPartSurfVec[0].ScaleY( m_Bradius() );
+        m_MainFeaPartSurfVec[0].ScaleZ( m_Cradius() );
 
         // Rotate at orgin and then translate to final location
         Matrix4d rot_mat_x, rot_mat_y, rot_mat_z;
@@ -3571,23 +3851,23 @@ void FeaDome::BuildDomeSurf()
 
         rot_mat_x.loadIdentity();
         rot_mat_x.rotate( DEG_2_RAD * m_XRot(), x_axis );
-        m_FeaPartSurfVec[0].Transform( rot_mat_x );
+        m_MainFeaPartSurfVec[0].Transform( rot_mat_x );
 
         rot_mat_y.loadIdentity();
         rot_mat_y.rotate( DEG_2_RAD * m_YRot(), y_axis );
-        m_FeaPartSurfVec[0].Transform( rot_mat_y );
+        m_MainFeaPartSurfVec[0].Transform( rot_mat_y );
 
         rot_mat_z.loadIdentity();
         rot_mat_z.rotate( DEG_2_RAD * m_ZRot(), z_axis );
-        m_FeaPartSurfVec[0].Transform( rot_mat_z );
+        m_MainFeaPartSurfVec[0].Transform( rot_mat_z );
 
-        m_FeaPartSurfVec[0].OffsetX( m_XLoc() );
-        m_FeaPartSurfVec[0].OffsetY( m_YLoc() );
-        m_FeaPartSurfVec[0].OffsetZ( m_ZLoc() );
+        m_MainFeaPartSurfVec[0].OffsetX( m_XLoc() );
+        m_MainFeaPartSurfVec[0].OffsetY( m_YLoc() );
+        m_MainFeaPartSurfVec[0].OffsetZ( m_ZLoc() );
 
         // Transform to parent geom body coordinate frame
         Matrix4d model_matrix = curr_geom->getModelMatrix();
-        m_FeaPartSurfVec[0].Transform( model_matrix );
+        m_MainFeaPartSurfVec[0].Transform( model_matrix );
 
         if ( m_SpineAttachFlag() )
         {
@@ -3596,59 +3876,45 @@ void FeaDome::BuildDomeSurf()
 
             // Build conformal spine from parent geom
             ConformalSpine cs;
-            cs.Build( surf_vec[m_MainSurfIndx()] );
+            cs.Build( surf_vec[m_MainSurfIndx] );
 
-            vec3d spine_center = cs.FindCenterGivenU( m_USpineLoc() * surf_vec[m_MainSurfIndx()].GetUMax() );
+            vec3d spine_center = cs.FindCenterGivenU( m_USpineLoc() * surf_vec[m_MainSurfIndx].GetUMax() );
 
-            m_FeaPartSurfVec[0].OffsetX( spine_center.x() - curr_geom->m_XLoc() );
-            m_FeaPartSurfVec[0].OffsetY( spine_center.y() - curr_geom->m_YLoc() );
-            m_FeaPartSurfVec[0].OffsetZ( spine_center.z() - curr_geom->m_ZLoc() );
+            m_MainFeaPartSurfVec[0].OffsetX( spine_center.x() - curr_geom->m_XLoc() );
+            m_MainFeaPartSurfVec[0].OffsetY( spine_center.y() - curr_geom->m_YLoc() );
+            m_MainFeaPartSurfVec[0].OffsetZ( spine_center.z() - curr_geom->m_ZLoc() );
         }
 
-        m_FeaPartSurfVec[0].BuildFeatureLines();
-
-        // Using the primary m_FeaPartSurfVec (index 0) as a reference, setup the symmetric copies to be defined in UpdateSymmParts 
-        for ( unsigned int j = 1; j < m_SymmIndexVec.size(); j++ )
-        {
-            m_FeaPartSurfVec[j] = m_FeaPartSurfVec[j - 1];
-        }
+        m_MainFeaPartSurfVec[0].BuildFeatureLines();
     }
 }
 
-void FeaDome::UpdateDrawObjs( int id, bool highlight )
+void FeaDome::UpdateDrawObjs()
 {
     // Two DrawObjs per Dome surface: index j correcponds to the surface (quads) and 
     //  j + 1 corresponds to the cross section feature line at u_max 
 
     m_FeaPartDO.clear();
-    m_FeaPartDO.resize( 2 * m_FeaPartSurfVec.size() );
+    m_FeaPartDO.resize( m_FeaPartSurfVec.size() );
+    m_FeaHighlightDO.clear();
+    m_FeaHighlightDO.resize( m_FeaPartSurfVec.size() );
 
-    for ( size_t j = 0; j < 2 * m_FeaPartSurfVec.size(); j += 2 )
+    for ( size_t j = 0; j < m_FeaPartSurfVec.size(); j++ )
     {
-        m_FeaPartDO[j].m_GeomID = string( m_Name + "_" + std::to_string( id ) + "_" + std::to_string( j ) );
+        m_FeaPartDO[j].m_GeomID = string( GetID() + "_" + std::to_string( j ) + "_" + m_Name );
         m_FeaPartDO[j].m_Screen = DrawObj::VSP_MAIN_SCREEN;
 
-        m_FeaPartDO[j + 1].m_GeomID = string( m_Name + "_" + std::to_string( id ) + "_" + std::to_string( j + 1 ) );
-        m_FeaPartDO[j + 1].m_Screen = DrawObj::VSP_MAIN_SCREEN;
+        m_FeaHighlightDO[j].m_GeomID = string( GetID() + "_hl_" + std::to_string( j ) + "_" + m_Name );
+        m_FeaHighlightDO[j].m_Screen = DrawObj::VSP_MAIN_SCREEN;
 
-        if ( highlight )
-        {
-            m_FeaPartDO[j].m_LineColor = vec3d( 1.0, 0.0, 0.0 );
-            m_FeaPartDO[j].m_LineWidth = 3.0;
-            m_FeaPartDO[j + 1].m_LineColor = vec3d( 1.0, 0.0, 0.0 );
-            m_FeaPartDO[j + 1].m_LineWidth = 3.0;
-        }
-        else
-        {
-            m_FeaPartDO[j].m_LineColor = vec3d( 96.0 / 255.0, 96.0 / 255.0, 96.0 / 255.0 );
-            m_FeaPartDO[j].m_LineWidth = 1.0;
-            m_FeaPartDO[j + 1].m_LineColor = vec3d( 96.0 / 255.0, 96.0 / 255.0, 96.0 / 255.0 );
-            m_FeaPartDO[j + 1].m_LineWidth = 1.0;
-        }
+        m_FeaPartDO[j].m_LineColor = vec3d( 96.0 / 255.0, 96.0 / 255.0, 96.0 / 255.0 );
+        m_FeaPartDO[j].m_LineWidth = 1.0;
+        m_FeaHighlightDO[j].m_LineColor = vec3d( 96.0 / 255.0, 96.0 / 255.0, 96.0 / 255.0 );
+        m_FeaHighlightDO[j].m_LineWidth = 1.0;
 
         // Tesselate the surface (can adjust num_u and num_v Tessellation for smoothness) 
         vector < vector < vec3d > > pnts, norms, uw;
-        m_FeaPartSurfVec[j / 2].Tesselate( 10, 18, pnts, norms, uw, 3, false );
+        m_FeaPartSurfVec[j].Tesselate( 10, 18, pnts, norms, uw, 3, false );
 
         // Define quads for bulkhead surface
         m_FeaPartDO[j].m_Type = DrawObj::VSP_SHADED_QUADS;
@@ -3689,27 +3955,20 @@ void FeaDome::UpdateDrawObjs( int id, bool highlight )
             m_FeaPartDO[j].m_MaterialInfo.Emission[i] = 0.0f;
         }
 
-        if ( highlight )
-        {
-            m_FeaPartDO[j].m_MaterialInfo.Diffuse[3] = 0.67f;
-        }
-        else
-        {
-            m_FeaPartDO[j].m_MaterialInfo.Diffuse[3] = 0.33f;
-        }
+        m_FeaPartDO[j].m_MaterialInfo.Diffuse[3] = 0.33f;
 
         m_FeaPartDO[j].m_MaterialInfo.Shininess = 5.0f;
 
         // Add points for bulkhead cross section at u_max
-        m_FeaPartDO[j + 1].m_Type = DrawObj::VSP_LINE_LOOP;
+        m_FeaHighlightDO[j].m_Type = DrawObj::VSP_LINE_LOOP;
 
         for ( size_t i = 0; i < pnts[pnts.size() - 1].size(); i++ )
         {
-            m_FeaPartDO[j + 1].m_PntVec.push_back( pnts[pnts.size() - 1][i] );
+            m_FeaHighlightDO[j].m_PntVec.push_back( pnts[pnts.size() - 1][i] );
         }
 
         m_FeaPartDO[j].m_GeomChanged = true;
-        m_FeaPartDO[j + 1].m_GeomChanged = true;
+        m_FeaHighlightDO[j].m_GeomChanged = true;
     }
 }
 
@@ -3774,12 +4033,12 @@ FeaRibArray::~FeaRibArray()
 
 }
 
-void FeaRibArray::Update()
+void FeaRibArray::UpdateSurface()
 {
     CalcNumRibs();
 
-    m_FeaPartSurfVec.clear();
-    m_FeaPartSurfVec.resize( m_SymmIndexVec.size() * m_NumRibs );
+    m_MainFeaPartSurfVec.clear();
+    m_MainFeaPartSurfVec.resize( m_NumRibs );
 
     CreateFeaRibArray();
 }
@@ -3942,7 +4201,7 @@ void FeaRibArray::CreateFeaRibArray()
         surf_vec = current_wing->GetSurfVecConstRef();
 
         BndBox wing_bbox;
-        surf_vec[m_MainSurfIndx()].GetBoundingBox( wing_bbox );
+        surf_vec[m_MainSurfIndx].GetBoundingBox( wing_bbox );
 
         for ( size_t i = 0; i < m_NumRibs; i++ )
         {
@@ -3978,34 +4237,7 @@ void FeaRibArray::CreateFeaRibArray()
             rib->GetRibPerU();
 
             // Get rib surface
-            VspSurf main_rib_surf = rib->ComputeRibSurf();
-
-            m_FeaPartSurfVec[i * m_SymmIndexVec.size()] = main_rib_surf;
-
-            if ( m_FeaPartSurfVec[m_SymmIndexVec.size() * i].GetFlipNormal() != surf_vec[m_MainSurfIndx()].GetFlipNormal() )
-            {
-                m_FeaPartSurfVec[m_SymmIndexVec.size() * i].FlipNormal();
-            }
-
-            // Using the primary m_FeaPartSurfVec (index 0) as a reference, setup the symmetric copiesvto be transformed 
-            for ( size_t j = 1; j < m_SymmIndexVec.size(); j++ )
-            {
-                m_FeaPartSurfVec[m_SymmIndexVec.size() * i + j] = m_FeaPartSurfVec[m_SymmIndexVec.size() * i + j - 1];
-            }
-
-            // Get Symmetric Translation Matrix
-            vector<Matrix4d> transMats = current_wing->GetFeaTransMatVec();
-
-            //==== Apply Transformations ====//
-            for ( size_t j = 1; j < m_SymmIndexVec.size(); j++ )
-            {
-                m_FeaPartSurfVec[m_SymmIndexVec.size() * i + j].Transform( transMats[j] ); // Apply total transformation to main FeaPart surface
-
-                if ( surf_vec[j].GetFlipNormal() != m_FeaPartSurfVec[m_SymmIndexVec.size() * i + j].GetFlipNormal() )
-                {
-                    m_FeaPartSurfVec[m_SymmIndexVec.size() * i + j].FlipNormal();
-                }
-            }
+            m_MainFeaPartSurfVec[i] = rib->ComputeRibSurf();
 
             delete rib;
         }
@@ -4042,9 +4274,7 @@ FeaRib* FeaRibArray::AddFeaRib( double center_location, int ind )
 
         fearib->SetName( string( m_Name + "_Rib" + std::to_string( ind ) ) );
 
-        fearib->UpdateSymmIndex();
         fearib->Update();
-        fearib->UpdateSymmParts();
     }
 
     return fearib;
@@ -4108,11 +4338,6 @@ xmlNodePtr FeaRibArray::DecodeXml( xmlNodePtr & node )
     return fea_prt_node;
 }
 
-void FeaRibArray::UpdateDrawObjs( int id, bool highlight )
-{
-    FeaPart::UpdateDrawObjs( id, highlight );
-}
-
 ////////////////////////////////////////////////////
 //================= FeaSliceArray ==================//
 ////////////////////////////////////////////////////
@@ -4158,12 +4383,12 @@ FeaSliceArray::FeaSliceArray( const string& geomID, int type ) : FeaPart( geomID
     m_NumSlices = 0;
 }
 
-void FeaSliceArray::Update()
+void FeaSliceArray::UpdateSurface()
 {
     CalcNumSlices();
 
-    m_FeaPartSurfVec.clear(); 
-    m_FeaPartSurfVec.resize( m_SymmIndexVec.size() * m_NumSlices );
+    m_MainFeaPartSurfVec.clear();
+    m_MainFeaPartSurfVec.resize( m_NumSlices );
 
     CreateFeaSliceArray();
 }
@@ -4188,7 +4413,7 @@ void FeaSliceArray::CalcNumSlices()
         Matrix4d model_matrix = current_geom->getModelMatrix();
         model_matrix.affineInverse();
 
-        VspSurf orig_surf = surf_vec[m_MainSurfIndx()];
+        VspSurf orig_surf = surf_vec[m_MainSurfIndx];
         orig_surf.Transform( model_matrix );
 
         BndBox geom_bbox;
@@ -4199,7 +4424,7 @@ void FeaSliceArray::CalcNumSlices()
         }
         else
         {
-            surf_vec[m_MainSurfIndx()].GetBoundingBox( geom_bbox );
+            surf_vec[m_MainSurfIndx].GetBoundingBox( geom_bbox );
         }
 
         if ( m_RotationAxis() == vsp::X_DIR )
@@ -4236,7 +4461,7 @@ void FeaSliceArray::CalcNumSlices()
         {
             // Build conformal spine from parent geom
             ConformalSpine cs;
-            cs.Build( surf_vec[m_MainSurfIndx()] );
+            cs.Build( surf_vec[m_MainSurfIndx] );
 
             perp_dist = cs.GetSpineLength();
         }
@@ -4372,34 +4597,7 @@ void FeaSliceArray::CreateFeaSliceArray()
 
             slice->UpdateParmLimits();
 
-            VspSurf main_slice_surf = slice->ComputeSliceSurf();
-
-            m_FeaPartSurfVec[i * m_SymmIndexVec.size()] = main_slice_surf;
-
-            if ( m_FeaPartSurfVec[m_SymmIndexVec.size() * i].GetFlipNormal() != surf_vec[m_MainSurfIndx()].GetFlipNormal() )
-            {
-                m_FeaPartSurfVec[m_SymmIndexVec.size() * i].FlipNormal();
-            }
-
-            // Using the primary m_FeaPartSurfVec (index 0) as a reference, setup the symmetric copiesvto be transformed 
-            for ( size_t j = 1; j < m_SymmIndexVec.size(); j++ )
-            {
-                m_FeaPartSurfVec[m_SymmIndexVec.size() * i + j] = m_FeaPartSurfVec[m_SymmIndexVec.size() * i + j - 1];
-            }
-
-            // Get Symmetric Translation Matrix
-            vector<Matrix4d> transMats = current_geom->GetFeaTransMatVec();
-
-            //==== Apply Transformations ====//
-            for ( size_t j = 1; j < m_SymmIndexVec.size(); j++ )
-            {
-                m_FeaPartSurfVec[m_SymmIndexVec.size() * i + j].Transform( transMats[j] ); // Apply total transformation to main FeaPart surface
-
-                if ( surf_vec[j].GetFlipNormal() != m_FeaPartSurfVec[m_SymmIndexVec.size() * i + j].GetFlipNormal() )
-                {
-                    m_FeaPartSurfVec[m_SymmIndexVec.size() * i + j].FlipNormal();
-                }
-            }
+            m_MainFeaPartSurfVec[i] = slice->ComputeSliceSurf();
 
             delete slice;
         }
@@ -4429,9 +4627,7 @@ FeaSlice* FeaSliceArray::AddFeaSlice( double center_location, int ind )
 
         slice->SetName( string( m_Name + "_Slice" + std::to_string( ind ) ) );
 
-        slice->UpdateSymmIndex();
         slice->Update();
-        slice->UpdateSymmParts();
     }
 
     return slice;
@@ -4447,11 +4643,6 @@ bool FeaSliceArray::PtsOnPlanarPart( const vector < vec3d > & pnts, double minle
         }
     }
     return false;
-}
-
-void FeaSliceArray::UpdateDrawObjs( int id, bool highlight )
-{
-    FeaPart::UpdateDrawObjs( id, highlight );
 }
 
 ////////////////////////////////////////////////////
@@ -4577,17 +4768,57 @@ string FeaProperty::GetXSecName()
 
 FeaMaterial::FeaMaterial() : ParmContainer()
 {
+    m_FeaMaterialType.Init( "FeaMaterialType", "FeaMaterial", this, vsp::FEA_ISOTROPIC, vsp::FEA_ISOTROPIC, vsp::FEA_NUM_MAT_TYPES - 1 );
+    m_FeaMaterialType.SetDescript( "Fea Material Type" );
+
     m_MassDensity.Init( "MassDensity", "FeaMaterial", this, 1.0, 0.0, 1.0e12 );
     m_MassDensity.SetDescript( "Mass Density of Material" );
 
     m_ElasticModulus.Init( "ElasticModulus", "FeaMaterial", this, 0.0, 0.0, 1.0e12 );
     m_ElasticModulus.SetDescript( "Elastic (Young's) Modulus for Material" );
 
-    m_PoissonRatio.Init( "PoissonRatio", "FeaMaterial", this, 0.0, 0.0, 1.0 );
+    m_PoissonRatio.Init( "PoissonRatio", "FeaMaterial", this, 0.0, -1.0, 0.5 );
     m_PoissonRatio.SetDescript( "Poisson's Ratio for Material" );
 
-    m_ThermalExpanCoeff.Init( "ThermalExpanCoeff", "FeaMaterial", this, 0.0, 0.0, 1.0e12 );
+    m_ThermalExpanCoeff.Init( "ThermalExpanCoeff", "FeaMaterial", this, 0.0, -1.0, 1.0 );
     m_ThermalExpanCoeff.SetDescript( "Thermal Expansion Coefficient for Material" );
+
+    m_E1.Init( "E1", "FeaMaterial", this, 0.0, 0.0, 1.0e12 );
+    m_E1.SetDescript( "E1 Elastic (Young's) Modulus for Material" );
+
+    m_E2.Init( "E2", "FeaMaterial", this, 0.0, 0.0, 1.0e12 );
+    m_E2.SetDescript( "E2 Elastic (Young's) Modulus for Material" );
+
+    m_E3.Init( "E3", "FeaMaterial", this, 0.0, 0.0, 1.0e12 );
+    m_E3.SetDescript( "E3 Elastic (Young's) Modulus for Material" );
+
+    m_nu12.Init( "nu12", "FeaMaterial", this, 0.0, -1.0, 1.0 );
+    m_nu12.SetDescript( "nu12 Poisson's Ratio for Material" );
+
+    m_nu13.Init( "nu13", "FeaMaterial", this, 0.0, -1.0, 1.0 );
+    m_nu13.SetDescript( "nu13 Poisson's Ratio for Material" );
+
+    m_nu23.Init( "nu23", "FeaMaterial", this, 0.0, -1.0, 1.0 );
+    m_nu23.SetDescript( "nu23 Poisson's Ratio for Material" );
+
+    m_G12.Init( "G12", "FeaMaterial", this, 0.0, 0.0, 1.0e12 );
+    m_G12.SetDescript( "G12 Shear Modulus for Material" );
+
+    m_G13.Init( "G13", "FeaMaterial", this, 0.0, 0.0, 1.0e12 );
+    m_G13.SetDescript( "G13 Shear Modulus for Material" );
+
+    m_G23.Init( "G23", "FeaMaterial", this, 0.0, 0.0, 1.0e12 );
+    m_G23.SetDescript( "G23 Shear Modulus for Material" );
+
+    m_A1.Init( "A1", "FeaMaterial", this, 0.0, -1.0, 1.0 );
+    m_A1.SetDescript( "A1 Thermal Expansion Coefficient for Material" );
+
+    m_A2.Init( "A2", "FeaMaterial", this, 0.0, -1.0, 1.0 );
+    m_A2.SetDescript( "A2 Thermal Expansion Coefficient for Material" );
+
+    m_A3.Init( "A3", "FeaMaterial", this, 0.0, -1.0, 1.0 );
+    m_A3.SetDescript( "A3 Thermal Expansion Coefficient for Material" );
+
 }
 
 FeaMaterial::~FeaMaterial()
@@ -4668,6 +4899,306 @@ void FeaMaterial::Update()
             m_ElasticModulus.Set( ConvertPressure( 205e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
             m_ThermalExpanCoeff.Set( ConvertThermalExpanCoeff( 13.7e-6, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-�C)
         }
+        else if ( strcmp( m_Name.c_str(), "Carbon Epoxy AS4 3501-6 [0_2/90]s" ) == 0 )
+        {
+            /*
+            AS4 3501-6 elasticity data from MIL-HDBK-17-3F p. 629
+            AS4 fiber density 1.79 g/cm^3
+            3501-6 resin density 1.265 g/cm^3
+            60.5% fiber volume fraction
+            laminateDensity = ( (1-V) * resinDensity) + (V * fiberDensity)
+            laminateDensity = 1.582625
+            */
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 1583, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( 79.3e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( 44.6e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( 11.4e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( 0.072 );
+            m_nu13.Set( 0.402 );
+            m_nu23.Set( 0.465 );
+            m_G12.Set( ConvertPressure( 6e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( 5.38e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( 3.47e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        else if ( strcmp( m_Name.c_str(), "Carbon Epoxy AS4 3501-6 [0/90]_2s" ) == 0 )
+        {
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 1583, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( 62.1e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( 62.1e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( 11e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( 0.052 );
+            m_nu13.Set( 0.438 );
+            m_nu23.Set( 0.427 );
+            m_G12.Set( ConvertPressure( 6e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( 4.22e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( 3.95e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        else if ( strcmp( m_Name.c_str(), "Carbon Epoxy AS4 3501-6 [0/90/+-45]s" ) == 0 )
+        {
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 1583, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( 46e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( 46.1e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( 11.1e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( 0.296 );
+            m_nu13.Set( 0.318 );
+            m_nu23.Set( 0.317 );
+            m_G12.Set( ConvertPressure( 17.7e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( 4.32e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( 3.58e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        else if ( strcmp( m_Name.c_str(), "Carbon Epoxy AS4 3501-6 [+-30]_2s" ) == 0 )
+        {
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 1583, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( 47.2e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( 12.2e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( 10.3e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( 1.13 );
+            m_nu13.Set( -0.197 );
+            m_nu23.Set( 0.434 );
+            m_G12.Set( ConvertPressure( 23.6e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( 4.88e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( 3.55e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        else if ( strcmp( m_Name.c_str(), "Carbon Epoxy AS4 3501-6 [+-45]_2s" ) == 0 )
+        {
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 1583, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( 20.3e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( 20.3e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( 11.8e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( 0.689 );
+            m_nu13.Set( 0.211 );
+            m_nu23.Set( 0.211 );
+            m_G12.Set( ConvertPressure( 29.4e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( 4.11e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( 4.11e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        else if ( strcmp( m_Name.c_str(), "Carbon Epoxy AS4 3501-6 [+-60]_2s" ) == 0 )
+        {
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 1583, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( 12.2e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( 47.2e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( 12e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( 0.294 );
+            m_nu13.Set( 0.434 );
+            m_nu23.Set( -0.197 );
+            m_G12.Set( ConvertPressure( 23.6e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( 3.55e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( 4.88e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        else if ( strcmp( m_Name.c_str(), "Glass Epoxy S2 3501-6 [0_2/90]s" ) == 0 )
+        {
+            /*
+            S2 3501-6 elasticity data from MIL-HDBK-17-3F p. 629
+            S2 fiber density 2.49 g/cm^3
+            3501-6 resin density 1.265 g/cm^3
+            50% fiber volume fraction
+            laminateDensity = ( (1-V) * resinDensity) + (V * fiberDensity)
+            laminateDensity = 1.8775
+            */
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 1878, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( 38.1e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( 26.4e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( 15.9e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( 0.165 );
+            m_nu13.Set( 0.359 );
+            m_nu23.Set( 0.427 );
+            m_G12.Set( ConvertPressure( 6.76e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( 6.33e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( 5.2e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        else if ( strcmp( m_Name.c_str(), "Glass Epoxy S2 3501-6 [0/90]_2s" ) == 0 )
+        {
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 1878, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( 32.3e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( 32.3e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( 15.8e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( 0.135 );
+            m_nu13.Set( 0.393 );
+            m_nu23.Set( 0.392 );
+            m_G12.Set( ConvertPressure( 6.76e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( 5.72e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( 5.59e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        else if ( strcmp( m_Name.c_str(), "Glass Epoxy S2 3501-6 [0/90/+-45]s" ) == 0 )
+        {
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 1878, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( 26.8e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( 26.8e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( 16e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( 0.28 );
+            m_nu13.Set( 0.329 );
+            m_nu23.Set( 0.329 );
+            m_G12.Set( ConvertPressure( 10.5e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( 5.78e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( 5.04e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        else if ( strcmp( m_Name.c_str(), "Balsa LTR" ) == 0 )
+        {
+            // Wood Handbook, Wood as an Engineering Material 2010
+            // Forest Products Laboratory. General Technical Report FPL-GTR-190.
+            // Madison, WI: U.S. Department of Agriculture, Forest Service, Forest Products Laboratory
+            double EL = 1.1 * 3400e6;  // 10% Correction to modulus from bending test.
+            double ET = 0.015 * EL;
+            double ER = 0.046 * EL;
+            double GLR = 0.054 * EL;
+            double GLT = 0.037 * EL;
+            double GRT = 0.005 * EL;
+            double nuLR = 0.229;
+            double nuLT = 0.488;
+            double nuRT = 0.665;
+
+            // Calculate these using equation to ensure consistent values.
+            // Commented value is that given in the reference
+            double nuRL = nuLR * ER / EL; // 0.018;
+            double nuTL = nuLT * ET / EL; // 0.009;
+            double nuTR = nuRT * ET / ER; // 0.231;
+
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 160, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( EL, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( ET, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( ER, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( nuLT );
+            m_nu13.Set( nuLR );
+            m_nu23.Set( nuTR );
+            m_G12.Set( ConvertPressure( GLT, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( GLR, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( GRT, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        else if ( strcmp( m_Name.c_str(), "Sitka Spruce LTR" ) == 0 )
+        {
+            // Elastic properties from NASA TM-104059
+            // Structural Integrity of Wind Tunnel Wooden Fan Blades
+            // Sitka Spruce 8% Moisture content
+            // Density and CTE from MatWeb
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 360, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+
+            double EL = 1772000;
+            double ET = 87000;
+            double ER = 154000;
+            double GLT = 117000;
+            double GLR = 120000;
+            double GRT = 7100;
+
+            double nuLT = 0.441;
+            double nuLR = 0.375;
+            double nuRT = 0.471;
+            // Calculate these using equation to ensure consistent values.
+            // Commented value is that given in the reference
+            double nuRL = nuLR * ER / EL; // 0.034;
+            double nuTL = nuLT * ET / EL; // 0.022;
+            double nuTR = nuRT * ET / ER; // 0.248;
+
+            m_E1.Set( ConvertPressure( EL, vsp::PRES_UNIT_PSI, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( ET, vsp::PRES_UNIT_PSI, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( ER, vsp::PRES_UNIT_PSI, pressure_unit ) ); // Pa
+            m_nu12.Set( nuLT );
+            m_nu13.Set( nuLR );
+            m_nu23.Set( nuTR );
+            m_G12.Set( ConvertPressure( GLT, vsp::PRES_UNIT_PSI, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( GLR, vsp::PRES_UNIT_PSI, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( GRT, vsp::PRES_UNIT_PSI, pressure_unit ) ); // Pa
+
+            m_A1.Set( ConvertThermalExpanCoeff( 5.4e-6, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 6.3e-6, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 34.1e-6, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        // This group of materials seemed mis-labeled in the handbook.
+        // It duplicates another entry above -- but the values are different.
+        // It is possible that these values apply to S2/3501-6 for the indicated laminate schedules.
+        /*
+        else if ( strcmp( m_Name.c_str(), "Carbon Epoxy AS4 3501-6 [+-30]_2s" ) == 0 )
+        {
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 1583, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( 30.7e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( 15.6e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( 14.9e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( 0.545 );
+            m_nu13.Set( 0.136 );
+            m_nu23.Set( 0.406 );
+            m_G12.Set( ConvertPressure( 12.3e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( 6.17e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( 5.26e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        else if ( strcmp( m_Name.c_str(), "Carbon Epoxy AS4 3501-6 [+-45]_2s" ) == 0 )
+        {
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 1583, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( 19.9e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( 19.9e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( 16.1e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( 0.467 );
+            m_nu13.Set( 0.284 );
+            m_nu23.Set( 0.284 );
+            m_G12.Set( ConvertPressure( 14.2e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( 5.67e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( 5.67e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        else if ( strcmp( m_Name.c_str(), "Carbon Epoxy AS4 3501-6 [+-60]_2s" ) == 0 )
+        {
+            m_FeaMaterialType.Set( vsp::FEA_ENG_ORTHO );
+            m_MassDensity.Set( ConvertDensity( 1583, vsp::RHO_UNIT_KG_M3, density_unit ) ); // kg/m^3
+            m_E1.Set( ConvertPressure( 15.6e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E2.Set( ConvertPressure( 30.7e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_E3.Set( ConvertPressure( 16.8e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_nu12.Set( 0.277 );
+            m_nu13.Set( 0.406 );
+            m_nu23.Set( 0.136 );
+            m_G12.Set( ConvertPressure( 12.3e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G13.Set( ConvertPressure( 5.26e9, vsp::PRES_UNIT_PA, pressure_unit ) ); // Pa
+            m_G23.Set( ConvertPressure( 6.17e9, vsp::PRES_UNIT_PA, pressure_unit ) ); //  Pa
+            m_A1.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A2.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+            m_A3.Set( ConvertThermalExpanCoeff( 0.0, vsp::SI_UNIT, veh->m_StructUnit() ) ); // m/(m-K)
+        }
+        */
     }
 }
 

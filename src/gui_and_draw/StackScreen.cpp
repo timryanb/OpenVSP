@@ -12,7 +12,7 @@
 using namespace vsp;
 
 //==== Constructor ====//
-StackScreen::StackScreen( ScreenMgr* mgr ) : SkinScreen( mgr, 400, 640+75, "Stack" )
+StackScreen::StackScreen( ScreenMgr* mgr ) : ChevronScreen( mgr, 400, 715, "Stack" )
 {
     m_CurrDisplayGroup = NULL;
 
@@ -97,6 +97,7 @@ StackScreen::StackScreen( ScreenMgr* mgr ) : SkinScreen( mgr, 400, 640+75, "Stac
     m_XSecLayout.AddYGap();
 
     AddXSecLayout();
+
 }
 
 //==== Show Pod Screen ====//
@@ -125,7 +126,7 @@ bool StackScreen::Update()
         return false;
     }
 
-    SkinScreen::Update();
+    ChevronScreen::Update();
     m_NumUSlider.Deactivate();
 
     StackGeom* stackgeom_ptr = dynamic_cast< StackGeom* >( geom_ptr );
@@ -258,10 +259,10 @@ bool StackScreen::Update()
             m_XSecSpinSlider.Deactivate();
         }
 
-        // Special considerations for loop policy
         XSecCurve* xsc = xs->GetXSecCurve();
         if ( xsc )
         {
+            // Special considerations for loop policy
             if ( lastxs && stackgeom_ptr->m_OrderPolicy() == StackGeom::STACK_LOOP )
             {
                 m_XSecTypeChoice.Deactivate();
@@ -279,6 +280,7 @@ bool StackScreen::Update()
             {
                 DisplayGroup ( NULL);
             }
+
         }
     }
     return true;
@@ -312,12 +314,12 @@ void StackScreen::GuiDeviceCallBack( GuiDevice* gui_device )
         stackgeom_ptr->InsertXSec( );
     }
 
-    SkinScreen::GuiDeviceCallBack( gui_device );
+    ChevronScreen::GuiDeviceCallBack( gui_device );
 }
 
 //==== Fltk  Callbacks ====//
 void StackScreen::CallBack( Fl_Widget *w )
 {
-    SkinScreen::CallBack( w );
+    ChevronScreen::CallBack( w );
 }
 

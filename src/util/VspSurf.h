@@ -114,11 +114,20 @@ public:
     void FindDistanceAngle( double &u, double &w, const vec3d &pt, const vec3d &dir, const double &d, const double &theta, const double &u0, const double &w0 ) const;
     void GuessDistanceAngle( double &du, double &dw, const vec3d &udir, const vec3d & wdir, const double &d, const double &theta ) const;
 
+    double FindRST( const vec3d & pt, const double &r0, const double &s0, const double &t0, double &r, double &s, double &t ) const;
+    double FindRST( const vec3d & pt, double &r, double &s, double &t ) const;
+    void FindRST( const vector < vec3d > & pt, vector < double > &r, vector < double > &s, vector < double > &t, vector < double > &d ) const;
+
+    void ConvertRSTtoLMN( const double &r, const double &s, const double &t, double &l, double &m, double &n ) const;
+    void ConvertLMNtoRST( const double &l, const double &m, const double &n, double &r, double &s, double &t ) const;
+
     double ProjectPt( const vec3d &inpt, const int &idir, double &u_out, double &w_out, vec3d & outpt ) const;
     double ProjectPt( const vec3d &inpt, const int &idir, const double &u0, const double &w0, double &u_out, double &w_out, vec3d & outpt ) const;
 
     double ProjectPt01( const vec3d &inpt, const int &idir, double &u_out, double &w_out, vec3d & outpt ) const;
     double ProjectPt01( const vec3d &inpt, const int &idir, const double &u0, const double &w0, double &u_out, double &w_out, vec3d & outpt ) const;
+
+    bool IsInside( const vec3d &pt );
 
     void GetUConstCurve( VspCurve &c, const double &u ) const;
     void GetWConstCurve( VspCurve &c, const double &w ) const;
@@ -128,6 +137,11 @@ public:
 
     Matrix4d CompRotCoordSys( const double &u, const double &w );
     Matrix4d CompTransCoordSys( const double &u, const double &w );
+
+    vec3d CompPntRST( double r, double s, double t ) const;
+    vec3d CompTanR( double r, double s, double t ) const;
+    vec3d CompTanS( double r, double s, double t ) const;
+    vec3d CompTanT( double r, double s, double t ) const;
 
     //===== Bezier Funcs ====//
     vec3d CompPnt( double u, double v ) const;
@@ -171,7 +185,7 @@ public:
     bool CapUMax(int capType, double len, double str, double offset, bool swflag);
     static bool CapWMin(int capType);
     static bool CapWMax(int capType);
-    void FetchXFerSurf( const std::string &geom_id, int surf_ind, int comp_ind, vector< XferSurf > &xfersurfs, const vector < double > &usuppress = std::vector< double >(), const vector < double > &wsuppress = std::vector< double >() ) const;
+    void FetchXFerSurf( const std::string &geom_id, int surf_ind, int comp_ind, int part_surf_num, vector< XferSurf > &xfersurfs, const vector < double > &usuppress = std::vector< double >(), const vector < double > &wsuppress = std::vector< double >() ) const;
 
     void ResetUSkip() const;
     void FlagDuplicate( const VspSurf &othersurf ) const;
@@ -251,7 +265,23 @@ public:
     void SetFoilSurf( VspSurf *s )                           { m_FoilSurf = s; }
     VspSurf *GetFoilSurf()                                   { return m_FoilSurf; }
 
-    void MakePlaneSurf( const vec3d &ptA, const vec3d &ptB, const vec3d &ptC, const vec3d &ptD );
+    void MakePlaneSurf( const vec3d &ptA, const vec3d &ptB, const vec3d &ptC, const vec3d &ptD, double expand = 1.0 );
+
+    void SetFeaOrientation( int otype, const vec3d &orient )
+    {
+        m_FeaOrientationType = otype;
+        m_FeaOrientation = orient;
+    }
+
+    int GetFeaOrientationType() const
+    {
+        return m_FeaOrientationType;
+    }
+
+    vec3d GetFeaOrientation() const
+    {
+        return m_FeaOrientation;
+    }
 
 protected:
 
@@ -265,6 +295,11 @@ protected:
     bool m_HalfBOR;
     int m_SurfType;
     int m_SurfCfdType;
+
+    // Possibly shouldn't be here, but seems as good as any place for now.
+    int m_FeaOrientationType;
+    vec3d m_FeaOrientation;
+
     piecewise_surface_type m_Surface;
 
     vector < double > m_UFeature;

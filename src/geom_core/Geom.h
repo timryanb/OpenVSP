@@ -179,7 +179,7 @@ public:
     virtual ~GeomBase();                        // Destructor
 
     // Only used internally.  Do not need to move to API.
-    enum { NONE, XFORM, TESS, SURF, HIGHLIGHT };
+    enum { NONE, XFORM, TESS, SURF, HIGHLIGHT, FEA };
 
     virtual GeomType GetType()
     {
@@ -240,6 +240,7 @@ public:
     bool m_UpdateSurf;
     bool m_TessDirty;
     bool m_HighlightDirty;
+    bool m_FeaDirty;
 
     void SetDirtyFlag( int dflag );
 
@@ -406,9 +407,12 @@ public:
     virtual double GetWMax( int indx ) const;
     virtual double GetMainWMax( int indx ) const;
 
-    virtual vector < int > & GetSymmIndexs( int imain )
+    virtual void GetSymmIndexs( int imain, vector < int > & symindexs )
     {
-        return m_SurfSymmMap[ imain ];
+        if ( imain >= 0 && imain < m_SurfSymmMap.size() )
+        {
+            symindexs = m_SurfSymmMap[ imain ];
+        }
     }
 
     virtual int GetMainSurfID( int surfnum )
@@ -431,6 +435,14 @@ public:
     virtual vec3d CompPnt01(const double &u, const double &w);
     virtual vec3d CompPnt01(const int &indx, const double &u, const double &w);
     virtual void GetUWTess01( int indx, vector < double > &u, vector < double > &w );
+
+    virtual vec3d CompTanU( const int &indx, const double &u, const double &w );
+    virtual vec3d CompTanW( const int &indx, const double &u, const double &w );
+
+    virtual vec3d CompPntRST( const int &indx, const double &r, const double &s, const double &t );
+    virtual vec3d CompTanR( const int &indx, const double &r, const double &s, const double &t );
+    virtual vec3d CompTanS( const int &indx, const double &r, const double &s, const double &t );
+    virtual vec3d CompTanT( const int &indx, const double &r, const double &s, const double &t );
 
     virtual bool CompRotCoordSys( const double &u, const double &w, Matrix4d &rotmat );
     virtual bool CompTransCoordSys( const double &u, const double &w, Matrix4d &transmat );

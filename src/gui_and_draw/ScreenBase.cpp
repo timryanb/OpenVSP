@@ -524,11 +524,12 @@ GeomScreen::GeomScreen( ScreenMgr* mgr, int w, int h, const string & title ) :
     m_SubSurfLayout.AddButton( m_DelSubSurfButton, "Delete" );
     m_SubSurfLayout.AddYGap();
 
-    m_SubSurfChoice.AddItem( SubSurface::GetTypeName( vsp::SS_LINE ) );
-    m_SubSurfChoice.AddItem( SubSurface::GetTypeName( vsp::SS_RECTANGLE ) );
-    m_SubSurfChoice.AddItem( SubSurface::GetTypeName( vsp::SS_ELLIPSE ) );
+    m_SubSurfChoice.AddItem( SubSurface::GetTypeName( vsp::SS_LINE ), vsp::SS_LINE );
+    m_SubSurfChoice.AddItem( SubSurface::GetTypeName( vsp::SS_RECTANGLE ), vsp::SS_RECTANGLE );
+    m_SubSurfChoice.AddItem( SubSurface::GetTypeName( vsp::SS_ELLIPSE ), vsp::SS_ELLIPSE );
 // Only add control surface in WingScreen.
-//    m_SubSurfChoice.AddItem( SubSurface::GetTypeName( vsp::SS_CONTROL) );
+//    m_SubSurfChoice.AddItem( SubSurface::GetTypeName( vsp::SS_CONTROL ), vsp::SS_CONTROL );
+    m_SubSurfChoice.AddItem( SubSurface::GetTypeName( vsp::SS_FINITE_LINE ), vsp::SS_FINITE_LINE );
 
     m_SubSurfLayout.SetChoiceButtonWidth( m_SubSurfLayout.GetRemainX() / 3 );
 
@@ -711,6 +712,19 @@ GeomScreen::GeomScreen( ScreenMgr* mgr, int w, int h, const string & title ) :
     m_SSConGroup.AddSlider( m_SSConEAngleSlider, "End Angle", 10.0, "%5.4f" );
 
     m_SSConGroup.AddSlider( m_SSConTessSlider, "Num Points", 100, "%5.0f" );
+
+    //==== SSFiniteLine ====//
+    m_SSCommonGroup.AddSubGroupLayout( m_SSFLineGroup, m_SSCommonGroup.GetW(), m_SSCommonGroup.GetRemainY() );
+    remain_x = m_SSFLineGroup.GetRemainX();
+
+    m_SSFLineGroup.SetFitWidthFlag( true );
+    m_SSFLineGroup.SetSameLineFlag( false );
+    m_SSFLineGroup.ForceNewLine();
+
+    m_SSFLineGroup.AddSlider( m_SSFLineUStartSlider, "U Start", 1, "%5.4f" );
+    m_SSFLineGroup.AddSlider( m_SSFLineUEndSlider, "U End", 1, "%5.4f" );
+    m_SSFLineGroup.AddSlider( m_SSFLineWStartSlider, "W Start", 1, "%5.4f" );
+    m_SSFLineGroup.AddSlider( m_SSFLineWEndSlider, "W End", 1, "%5.4f" );
 
     m_RotActive = true;
 }
@@ -1007,6 +1021,17 @@ bool GeomScreen::Update()
             m_SSConSurfTypeChoice.Update(sscon->m_SurfType.GetID());
             SubSurfDispGroup(&m_SSConGroup);
         }
+        else if ( subsurf->GetType() == vsp::SS_FINITE_LINE )
+        {
+            SSFiniteLine* ssfline = dynamic_cast< SSFiniteLine* >( subsurf );
+            assert( ssfline );
+
+            m_SSFLineUStartSlider.Update( ssfline->m_UStart.GetID() );
+            m_SSFLineUEndSlider.Update( ssfline->m_UEnd.GetID() );
+            m_SSFLineWStartSlider.Update( ssfline->m_WStart.GetID() );
+            m_SSFLineWEndSlider.Update( ssfline->m_WEnd.GetID() );
+            SubSurfDispGroup( &m_SSFLineGroup );
+        }
     }
     else
     {
@@ -1146,22 +1171,7 @@ void GeomScreen::GuiDeviceCallBack( GuiDevice* device )
     else if ( device == &m_AddSubSurfButton )
     {
         SubSurface* ssurf = NULL;
-        if ( m_SubSurfChoice.GetVal() == vsp::SS_LINE )
-        {
-            ssurf = geom_ptr->AddSubSurf( vsp::SS_LINE, m_SSCurrMainSurfIndx );
-        }
-        else if ( m_SubSurfChoice.GetVal() == vsp::SS_RECTANGLE )
-        {
-            ssurf = geom_ptr->AddSubSurf( vsp::SS_RECTANGLE, m_SSCurrMainSurfIndx );
-        }
-        else if ( m_SubSurfChoice.GetVal() == vsp::SS_ELLIPSE )
-        {
-            ssurf = geom_ptr->AddSubSurf( vsp::SS_ELLIPSE, m_SSCurrMainSurfIndx );
-        }
-        else if (m_SubSurfChoice.GetVal() == vsp::SS_CONTROL)
-        {
-            ssurf = geom_ptr->AddSubSurf(vsp::SS_CONTROL, m_SSCurrMainSurfIndx);
-        }
+        ssurf = geom_ptr->AddSubSurf( m_SubSurfChoice.GetVal(), m_SSCurrMainSurfIndx );
 
         if ( ssurf )
         {
@@ -1202,6 +1212,7 @@ void GeomScreen::SubSurfDispGroup( GroupLayout* group )
     m_SSCommonGroup.Hide();
     m_SSEllGroup.Hide();
     m_SSConGroup.Hide();
+    m_SSFLineGroup.Hide();
 
     m_CurSubDispGroup = group;
 
@@ -2315,7 +2326,7 @@ void XSecScreen::GuiDeviceCallBack( GuiDevice* gui_device )
         return;
     }
     GeomXSec* xsec_geom_ptr = dynamic_cast<GeomXSec*>(geom_ptr);
-    assert( stackgeom_ptr );
+    assert( xsec_geom_ptr );
     // Note: BOR requires it's own GuiDeviceCallBack because it is not a GeomXSec
 
     if (gui_device == &m_XSecTypeChoice)
@@ -2947,6 +2958,258 @@ void SkinScreen::GuiDeviceCallBack( GuiDevice* gui_device )
 void SkinScreen::CallBack( Fl_Widget *w )
 {
     XSecScreen::CallBack( w );
+}
+
+
+//=====================================================================//
+//=====================================================================//
+//=====================================================================//
+ChevronScreen::ChevronScreen( ScreenMgr* mgr, int w, int h, const string & title ) :
+        SkinScreen( mgr, w, h, title )
+{
+
+    //==== XSec Modifications ====//
+
+    Fl_Group* modify_tab = AddTab( "Modify" );
+    Fl_Group* modify_group = AddSubGroup( modify_tab, 5 );
+
+    m_ModifyLayout.SetButtonWidth( 70 );
+
+    m_ModifyLayout.SetGroupAndScreen( modify_group, this );
+    m_ModifyLayout.AddDividerBox( "XSec" );
+
+    m_ModifyLayout.AddIndexSelector( m_XsecModIndexSelector );
+
+    m_ModifyLayout.AddYGap();
+
+    m_ModifyLayout.InitWidthHeightVals();
+    m_ModifyLayout.SetChoiceButtonWidth( m_ModifyLayout.GetButtonWidth() );
+
+    m_ModifyLayout.AddYGap();
+    m_ModifyLayout.AddDividerBox( "Chevron" );
+
+    m_ChevronModeChoice.AddItem( "NONE", vsp::CHEVRON_NONE );
+    m_ChevronModeChoice.AddItem( "PARTIAL", vsp::CHEVRON_PARTIAL );
+    m_ChevronModeChoice.AddItem( "FULL", vsp::CHEVRON_FULL );
+    m_ModifyLayout.AddChoice( m_ChevronModeChoice, "Type:" );
+
+    m_ModifyLayout.AddSlider( m_ChevNumberSlider, "Number", 10, " %5.0f" );
+
+    m_ModifyLayout.AddYGap();
+    m_ModifyLayout.AddDividerBox( "Corner Rounding Radius" );
+
+    m_ModifyLayout.SetButtonWidth( m_ModifyLayout.GetButtonWidth() * 0.6 );
+
+    m_ModifyLayout.SetSameLineFlag( true );
+    m_ModifyLayout.AddSlider( m_ChevPeakRadSlider, "Peak", 1.0, "%6.5f", m_ModifyLayout.GetW() * 0.5 + 5 );
+    m_ModifyLayout.AddX( 5 );
+    m_ModifyLayout.AddSlider( m_ChevValleyRadSlider, "Valley", 1.0, "%6.5f" );
+    m_ModifyLayout.ForceNewLine();
+    m_ModifyLayout.SetSameLineFlag( false );
+
+    m_ModifyLayout.AddYGap();
+    m_ModifyLayout.AddDividerBox( "Waveform" );
+
+    m_ModifyLayout.SetSameLineFlag( true );
+    m_ModifyLayout.AddSlider( m_ChevOnDutySlider, "\% On", 1, "%6.5f", m_ModifyLayout.GetW() * 0.5 + 5 );
+    m_ModifyLayout.AddX( 5 );
+    m_ModifyLayout.AddSlider( m_ChevOffDutySlider, "\% Off", 1, "%6.5f" );
+    m_ModifyLayout.ForceNewLine();
+    m_ModifyLayout.SetSameLineFlag( false );
+
+    m_ModifyLayout.InitWidthHeightVals();
+    m_ModifyLayout.SetChoiceButtonWidth( m_ModifyLayout.GetButtonWidth() );
+
+    m_ModifyLayout.AddYGap();
+    m_ModifyLayout.AddDividerBox( "Extents" );
+
+    m_ChevronExtentModeChoice.AddItem( "Start \\/ End", vsp::CHEVRON_W01_SE );
+    m_ChevronExtentModeChoice.AddItem( "Center \\/ Width", vsp::CHEVRON_W01_CW );
+    m_ModifyLayout.AddChoice( m_ChevronExtentModeChoice, "Mode:" );
+
+    m_ModifyLayout.SetChoiceButtonWidth( 0 );
+    m_ModifyLayout.SetSameLineFlag( true );
+
+    int sliderw = m_ModifyLayout.GetSliderWidth();
+    m_ModifyLayout.SetSliderWidth( 75 );
+
+    m_ModifyLayout.AddSlider( m_ChevW01StartSlider, "W Start", 1, "%6.5f", m_ModifyLayout.GetSliderWidth() );
+
+    m_ChevW01StartChoice.AddItem( "Free", vsp::W_FREE );
+    m_ChevW01StartChoice.AddItem( "Right 0", vsp::W_RIGHT_0 );
+    m_ChevW01StartChoice.AddItem( "Bottom", vsp::W_BOTTOM );
+    m_ChevW01StartChoice.AddItem( "Left", vsp::W_LEFT );
+    m_ChevW01StartChoice.AddItem( "Top", vsp::W_TOP );
+    m_ChevW01StartChoice.AddItem( "Right 1", vsp::W_RIGHT_1 );
+    m_ModifyLayout.SetFitWidthFlag( false );
+    m_ModifyLayout.AddChoice( m_ChevW01StartChoice, "W Start:" );
+
+    m_ModifyLayout.ForceNewLine();
+    m_ModifyLayout.SetFitWidthFlag( true );
+
+    m_ModifyLayout.AddSlider( m_ChevW01EndSlider, "W End", 1, "%6.5f", m_ModifyLayout.GetSliderWidth() );
+
+    m_ChevW01EndChoice.AddItem( "Free", vsp::W_FREE );
+    m_ChevW01EndChoice.AddItem( "Right 0", vsp::W_RIGHT_0 );
+    m_ChevW01EndChoice.AddItem( "Bottom", vsp::W_BOTTOM );
+    m_ChevW01EndChoice.AddItem( "Left", vsp::W_LEFT );
+    m_ChevW01EndChoice.AddItem( "Top", vsp::W_TOP );
+    m_ChevW01EndChoice.AddItem( "Right 1", vsp::W_RIGHT_1 );
+    m_ModifyLayout.SetFitWidthFlag( false );
+    m_ModifyLayout.AddChoice( m_ChevW01EndChoice, "W End:" );
+
+    m_ModifyLayout.ForceNewLine();
+    m_ModifyLayout.SetFitWidthFlag( true );
+
+    m_ModifyLayout.AddSlider( m_ChevW01CenterSlider, "W Center", 1, "%6.5f", m_ModifyLayout.GetSliderWidth() );
+
+    m_ChevW01CenterChoice.AddItem( "Free", vsp::W_FREE );
+    m_ChevW01CenterChoice.AddItem( "Right 0", vsp::W_RIGHT_0 );
+    m_ChevW01CenterChoice.AddItem( "Bottom", vsp::W_BOTTOM );
+    m_ChevW01CenterChoice.AddItem( "Left", vsp::W_LEFT );
+    m_ChevW01CenterChoice.AddItem( "Top", vsp::W_TOP );
+    m_ChevW01CenterChoice.AddItem( "Right 1", vsp::W_RIGHT_1 );
+    m_ModifyLayout.SetFitWidthFlag( false );
+    m_ModifyLayout.AddChoice( m_ChevW01CenterChoice, "W Center:" );
+
+    m_ModifyLayout.ForceNewLine();
+    m_ModifyLayout.SetSameLineFlag( false );
+    m_ModifyLayout.SetFitWidthFlag( true );
+
+    m_ModifyLayout.AddSlider( m_ChevW01WidthSlider, "W Width", 1, "%6.5f", m_ModifyLayout.GetSliderWidth() );
+
+    m_ModifyLayout.SetSliderWidth( sliderw );
+
+    m_ModifyLayout.AddYGap();
+
+    m_ModifyLayout.SetDividerHeight( m_ModifyLayout.GetStdHeight() );
+
+    m_ModifyLayout.SetSameLineFlag( true );
+    m_ModifyLayout.AddDividerBox( "Top Side", m_ModifyLayout.GetButtonWidth() );
+    m_ModifyLayout.SetFitWidthFlag( false );
+    m_ModifyLayout.AddButton( m_ChevAngleAllSymButton, "All Sym" );
+    m_ModifyLayout.ForceNewLine();
+    m_ModifyLayout.SetFitWidthFlag( true );
+    m_ModifyLayout.SetSameLineFlag( false );
+
+    m_ModifyLayout.AddSlider( m_ChevTopAmpSlider, "Amplitude", 10, "%6.5f" );
+    m_ModifyLayout.AddSlider( m_ChevDirTopAngleSlider, "Angle", 90.0, "%5.2f" );
+    m_ModifyLayout.AddSlider( m_ChevDirTopSlewSlider, "Slew", 90.0, "%5.2f" );
+
+    m_ModifyLayout.AddYGap();
+    m_ModifyLayout.AddDividerBox( "Right Side" );
+
+    m_ModifyLayout.AddSlider( m_ChevRightAmpSlider, "Amplitude", 10, "%6.5f" );
+    m_ModifyLayout.AddSlider( m_ChevDirRightAngleSlider, "Angle", 90.0, "%5.2f" );
+    m_ModifyLayout.AddSlider( m_ChevDirRightSlewSlider, "Slew", 90.0, "%5.2f" );
+
+    m_ModifyLayout.AddYGap();
+    m_ModifyLayout.SetSameLineFlag( true );
+    m_ModifyLayout.AddDividerBox( "Bottom Side", m_ModifyLayout.GetButtonWidth() );
+    m_ModifyLayout.SetFitWidthFlag( false );
+    m_ModifyLayout.AddButton( m_ChevAngleTBSymButton, "T/B Sym" );
+    m_ModifyLayout.ForceNewLine();
+    m_ModifyLayout.SetFitWidthFlag( true );
+    m_ModifyLayout.SetSameLineFlag( false );
+
+    m_ModifyLayout.AddSlider( m_ChevBottomAmpSlider, "Amplitude", 10, "%6.5f" );
+    m_ModifyLayout.AddSlider( m_ChevDirBottomAngleSlider, "Angle", 90.0, "%5.2f" );
+    m_ModifyLayout.AddSlider( m_ChevDirBottomSlewSlider, "Slew", 90.0, "%5.2f" );
+
+    m_ModifyLayout.AddYGap();
+    m_ModifyLayout.SetSameLineFlag( true );
+    m_ModifyLayout.AddDividerBox( "Left Side", m_ModifyLayout.GetButtonWidth() );
+    m_ModifyLayout.SetFitWidthFlag( false );
+    m_ModifyLayout.AddButton( m_ChevAngleRLSymButton, "R/L Sym" );
+    m_ModifyLayout.ForceNewLine();
+    m_ModifyLayout.SetFitWidthFlag( true );
+    m_ModifyLayout.SetSameLineFlag( false );
+
+    m_ModifyLayout.AddSlider( m_ChevLeftAmpSlider, "Amplitude", 10, "%6.5f" );
+    m_ModifyLayout.AddSlider( m_ChevDirLeftAngleSlider, "Angle", 90.0, "%5.2f" );
+    m_ModifyLayout.AddSlider( m_ChevDirLeftSlewSlider, "Slew", 90.0, "%5.2f" );
+}
+
+//==== Update Pod Screen ====//
+bool ChevronScreen::Update()
+{
+    assert( m_ScreenMgr );
+
+    Geom* geom_ptr = m_ScreenMgr->GetCurrGeom();
+    if ( !geom_ptr )
+    {
+        Hide();
+        return false;
+    }
+
+    SkinScreen::Update();
+
+    GeomXSec* geomxsec_ptr = dynamic_cast< GeomXSec* >( geom_ptr );
+    assert( geomxsec_ptr );
+
+    //==== XSec Index Display ===//
+    int xsid = geomxsec_ptr->m_ActiveXSec();
+    m_XsecModIndexSelector.Update( geomxsec_ptr->m_ActiveXSec.GetID() );
+
+    StackXSec* xs = ( StackXSec* ) geomxsec_ptr->GetXSec( xsid );
+    if ( xs )
+    {
+        XSecCurve* xsc = xs->GetXSecCurve();
+        if ( xsc )
+        {
+
+            m_ChevronModeChoice.Update( xsc->m_ChevronType.GetID() );
+
+            m_ChevTopAmpSlider.Update( xsc->m_ChevTopAmplitude.GetID() );
+            m_ChevBottomAmpSlider.Update( xsc->m_ChevBottomAmplitude.GetID() );
+            m_ChevLeftAmpSlider.Update( xsc->m_ChevLeftAmplitude.GetID() );
+            m_ChevRightAmpSlider.Update( xsc->m_ChevRightAmplitude.GetID() );
+
+            m_ChevNumberSlider.Update( xsc->m_ChevNumber.GetID() );
+
+            m_ChevOnDutySlider.Update( xsc->m_ChevOnDuty.GetID() );
+            m_ChevOffDutySlider.Update( xsc->m_ChevOffDuty.GetID() );
+
+            m_ChevronExtentModeChoice.Update( xsc->m_ChevronExtentMode.GetID() );
+
+            m_ChevW01StartChoice.Update( xsc->m_ChevW01StartGuide.GetID() );
+            m_ChevW01StartSlider.Update( xsc->m_ChevW01Start.GetID() );
+            m_ChevW01EndChoice.Update( xsc->m_ChevW01EndGuide.GetID() );
+            m_ChevW01EndSlider.Update( xsc->m_ChevW01End.GetID() );
+            m_ChevW01CenterChoice.Update( xsc->m_ChevW01CenterGuide.GetID() );
+            m_ChevW01CenterSlider.Update( xsc->m_ChevW01Center.GetID() );
+            m_ChevW01WidthSlider.Update( xsc->m_ChevW01Width.GetID() );
+
+            m_ChevAngleAllSymButton.Update( xsc->m_ChevDirAngleAllSymFlag.GetID() );
+            m_ChevAngleTBSymButton.Update( xsc->m_ChevDirAngleTBSymFlag.GetID() );
+            m_ChevAngleRLSymButton.Update( xsc->m_ChevDirAngleRLSymFlag.GetID() );
+
+            m_ChevDirTopAngleSlider.Update( xsc->m_ChevTopAngle.GetID() );
+            m_ChevDirBottomAngleSlider.Update( xsc->m_ChevBottomAngle.GetID() );
+            m_ChevDirRightAngleSlider.Update( xsc->m_ChevRightAngle.GetID() );
+            m_ChevDirLeftAngleSlider.Update( xsc->m_ChevLeftAngle.GetID() );
+
+            m_ChevDirTopSlewSlider.Update( xsc->m_ChevTopSlew.GetID() );
+            m_ChevDirBottomSlewSlider.Update( xsc->m_ChevBottomSlew.GetID() );
+            m_ChevDirRightSlewSlider.Update( xsc->m_ChevRightSlew.GetID() );
+            m_ChevDirLeftSlewSlider.Update( xsc->m_ChevLeftSlew.GetID() );
+
+            m_ChevValleyRadSlider.Update( xsc->m_ValleyRad.GetID() );
+            m_ChevPeakRadSlider.Update( xsc->m_PeakRad.GetID() );
+        }
+    }
+    return true;
+}
+
+void ChevronScreen::GuiDeviceCallBack( GuiDevice* gui_device )
+{
+    SkinScreen::GuiDeviceCallBack( gui_device );
+}
+
+//==== Fltk  Callbacks ====//
+void ChevronScreen::CallBack( Fl_Widget *w )
+{
+    SkinScreen::CallBack( w );
 }
 
 

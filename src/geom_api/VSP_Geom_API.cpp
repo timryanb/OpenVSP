@@ -29,6 +29,7 @@
 #include "VKTAirfoil.h"
 #include "StructureMgr.h"
 #include "FeaMeshMgr.h"
+#include "main.h"
 
 #include "eli/mutil/quad/simpson.hpp"
 
@@ -3779,7 +3780,49 @@ void ReadFileAirfoil( const string& xsec_id, const string& file_name )
     return;
 }
 
-void SetAirfoilPnts( const string& xsec_id, std::vector< vec3d > & up_pnt_vec, std::vector< vec3d > & low_pnt_vec )
+void SetAirfoilUpperPnts( const string& xsec_id, const std::vector< vec3d > & up_pnt_vec )
+{
+    XSec* xs = FindXSec( xsec_id );
+    if ( !xs )
+    {
+        ErrorMgr.AddError( VSP_INVALID_PTR, "SetAirfoilUpperPnts::Can't Find XSec " + xsec_id );
+        return;
+    }
+
+    if ( xs->GetXSecCurve()->GetType() != XS_FILE_AIRFOIL )
+    {
+        ErrorMgr.AddError( VSP_WRONG_XSEC_TYPE, "SetAirfoilUpperPnts::XSec Not XS_FILE_AIRFOIL Type" );
+        return;
+    }
+
+    FileAirfoil* file_xs = dynamic_cast<FileAirfoil*>( xs->GetXSecCurve() );
+    assert( file_xs );
+    file_xs->SetAirfoilUpperPnts( up_pnt_vec );
+    ErrorMgr.NoError();
+}
+
+void SetAirfoilLowerPnts( const string& xsec_id, const std::vector< vec3d > & low_pnt_vec )
+{
+    XSec* xs = FindXSec( xsec_id );
+    if ( !xs )
+    {
+        ErrorMgr.AddError( VSP_INVALID_PTR, "SetAirfoilLowerPnts::Can't Find XSec " + xsec_id );
+        return;
+    }
+
+    if ( xs->GetXSecCurve()->GetType() != XS_FILE_AIRFOIL )
+    {
+        ErrorMgr.AddError( VSP_WRONG_XSEC_TYPE, "SetAirfoilLowerPnts::XSec Not XS_FILE_AIRFOIL Type" );
+        return;
+    }
+
+    FileAirfoil* file_xs = dynamic_cast<FileAirfoil*>( xs->GetXSecCurve() );
+    assert( file_xs );
+    file_xs->SetAirfoilLowerPnts( low_pnt_vec );
+    ErrorMgr.NoError();
+}
+
+void SetAirfoilPnts( const string& xsec_id, const std::vector< vec3d > & up_pnt_vec, const std::vector< vec3d > & low_pnt_vec )
 {
     XSec* xs = FindXSec( xsec_id );
     if ( !xs )
@@ -4952,7 +4995,81 @@ void ReadBORFileAirfoil( const string& bor_id, const string& file_name )
     return;
 }
 
-void SetBORAirfoilPnts( const string& bor_id, std::vector< vec3d > & up_pnt_vec, std::vector< vec3d > & low_pnt_vec )
+void SetBORAirfoilUpperPnts( const string& bor_id, const std::vector< vec3d > & up_pnt_vec )
+{
+    Vehicle* veh = GetVehicle();
+    Geom* geom_ptr = veh->FindGeom( bor_id );
+    if ( !geom_ptr )
+    {
+        ErrorMgr.AddError( VSP_INVALID_PTR, "SetBORAirfoilUpperPnts::Can't Find Geom " + bor_id );
+        return;
+    }
+    else if ( geom_ptr->GetType().m_Type != BOR_GEOM_TYPE )
+    {
+        ErrorMgr.AddError( VSP_INVALID_TYPE, "SetBORAirfoilUpperPnts::Geom " + bor_id + " is not a body of revolution" );
+        return;
+    }
+
+    BORGeom* bor_ptr = dynamic_cast< BORGeom* > ( geom_ptr );
+
+    XSecCurve* xsc = bor_ptr->GetXSecCurve();
+
+    if ( !xsc )
+    {
+        ErrorMgr.AddError( VSP_INVALID_PTR, "SetBORAirfoilUpperPnts::Can't Get XSecCurve" );
+        return;
+    }
+
+    if ( xsc->GetType() != XS_FILE_AIRFOIL )
+    {
+        ErrorMgr.AddError( VSP_WRONG_XSEC_TYPE, "SetBORAirfoilUpperPnts::XSec Not XS_FILE_AIRFOIL Type" );
+        return;
+    }
+
+    FileAirfoil* file_xs = dynamic_cast<FileAirfoil*>( xsc );
+    assert( file_xs );
+    file_xs->SetAirfoilUpperPnts( up_pnt_vec );
+    ErrorMgr.NoError();
+}
+
+void SetBORAirfoilLowerPnts( const string& bor_id, const std::vector< vec3d > & low_pnt_vec )
+{
+    Vehicle* veh = GetVehicle();
+    Geom* geom_ptr = veh->FindGeom( bor_id );
+    if ( !geom_ptr )
+    {
+        ErrorMgr.AddError( VSP_INVALID_PTR, "SetBORAirfoilLowerPnts::Can't Find Geom " + bor_id );
+        return;
+    }
+    else if ( geom_ptr->GetType().m_Type != BOR_GEOM_TYPE )
+    {
+        ErrorMgr.AddError( VSP_INVALID_TYPE, "SetBORAirfoilLowerPnts::Geom " + bor_id + " is not a body of revolution" );
+        return;
+    }
+
+    BORGeom* bor_ptr = dynamic_cast< BORGeom* > ( geom_ptr );
+
+    XSecCurve* xsc = bor_ptr->GetXSecCurve();
+
+    if ( !xsc )
+    {
+        ErrorMgr.AddError( VSP_INVALID_PTR, "SetBORAirfoilLowerPnts::Can't Get XSecCurve" );
+        return;
+    }
+
+    if ( xsc->GetType() != XS_FILE_AIRFOIL )
+    {
+        ErrorMgr.AddError( VSP_WRONG_XSEC_TYPE, "SetBORAirfoilLowerPnts::XSec Not XS_FILE_AIRFOIL Type" );
+        return;
+    }
+
+    FileAirfoil* file_xs = dynamic_cast<FileAirfoil*>( xsc );
+    assert( file_xs );
+    file_xs->SetAirfoilLowerPnts( low_pnt_vec );
+    ErrorMgr.NoError();
+}
+
+void SetBORAirfoilPnts( const string& bor_id, const std::vector< vec3d > & up_pnt_vec, const std::vector< vec3d > & low_pnt_vec )
 {
     Vehicle* veh = GetVehicle();
     Geom* geom_ptr = veh->FindGeom( bor_id );
@@ -5637,7 +5754,7 @@ vector < vec3d > GetEditXSecCtrlVec( const std::string& xsec_id, const bool non_
     return edit_xs->GetCtrlPntVec( non_dimensional );
 }
 
-void SetEditXSecPnts( const std::string & xsec_id, vector < double > u_vec, vector < vec3d > control_pts )
+void SetEditXSecPnts( const std::string & xsec_id, vector < double > u_vec, vector < vec3d > control_pts, vector < double > r_vec )
 {
     XSec* xs = FindXSec( xsec_id );
     if ( !xs )
@@ -5657,7 +5774,7 @@ void SetEditXSecPnts( const std::string & xsec_id, vector < double > u_vec, vect
 
     ErrorMgr.NoError();
 
-    edit_xs->SetPntVecs( u_vec, control_pts );
+    edit_xs->SetPntVecs( u_vec, control_pts, r_vec );
 }
 
 void EditXSecDelPnt( const std::string & xsec_id, const int & indx )
@@ -5733,6 +5850,7 @@ void MoveEditXSecPnt( const std::string & xsec_id, const int & indx, const vec3d
     // edit_xs->MovePnt also moves adjacent CEDIT points, so just set parm values directly
     edit_xs->m_XParmVec[indx]->Set( new_pnt.x() );
     edit_xs->m_YParmVec[indx]->Set( new_pnt.y() );
+    edit_xs->m_ZParmVec[indx]->Set( new_pnt.z() );
 
     edit_xs->ParmChanged( NULL, Parm::SET_FROM_DEVICE ); // Force update
 
@@ -7580,6 +7698,151 @@ double AxisProjPnt01Guess(const std::string &geom_id, const int &surf_indx, cons
     return idmin;
 }
 
+bool InsideSurf( const std::string &geom_id, const int &surf_indx, const vec3d &pt )
+{
+    Vehicle* veh = GetVehicle();
+    Geom* geom_ptr = veh->FindGeom( geom_id );
+    if ( !geom_ptr )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "InsideSurf::Can't Find Geom " + geom_id );
+        return false;
+    }
+
+    if ( surf_indx < 0 || surf_indx >= geom_ptr->GetNumTotalSurfs() )
+    {
+        ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "InsideSurf::Invalid Surface Index " + to_string( surf_indx ) );
+        return false;
+    }
+
+    bool ret = geom_ptr->GetSurfPtr( surf_indx )->IsInside( pt );
+
+    ErrorMgr.NoError();
+    return ret;
+}
+
+vec3d CompPntRST( const std::string &geom_id, const int &surf_indx, const double &r, const double &s, const double &t )
+{
+    Vehicle* veh = GetVehicle();
+    Geom* geom_ptr = veh->FindGeom( geom_id );
+    vec3d ret;
+    if ( !geom_ptr )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "CompPntRST::Can't Find Geom " + geom_id );
+        return ret;
+    }
+
+    if ( surf_indx < 0 || surf_indx >= geom_ptr->GetNumTotalSurfs() )
+    {
+        ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "CompPntRST::Invalid Surface Index " + to_string( surf_indx ) );
+        return ret;
+    }
+
+    ret = geom_ptr->CompPntRST( surf_indx, clamp( r, 0.0, 1.0 ), clamp( s, 0.0, 0.5 ), clamp( t, 0.0, 1.0 ) );
+
+    ErrorMgr.NoError();
+    return ret;
+}
+
+double FindRST( const std::string &geom_id, const int &surf_indx, const vec3d &pt, double &r_out, double &s_out, double &t_out )
+{
+    Vehicle* vPtr = VehicleMgr.GetVehicle();
+    Geom * geom = vPtr->FindGeom( geom_id );
+
+    double dist = std::numeric_limits<double>::max();
+
+    if ( !geom )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "FindRST::Can't Find Geom " + geom_id );
+        return dist;
+    }
+
+    if ( surf_indx < 0 || surf_indx >= geom->GetNumTotalSurfs() )
+    {
+        ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "FindRST::Invalid Surface Index " + to_string( surf_indx ) );
+        return dist;
+    }
+
+    dist = geom->GetSurfPtr( surf_indx )->FindRST( pt, r_out, s_out, t_out );
+
+    ErrorMgr.NoError();
+
+    return dist;
+}
+
+double FindRSTGuess( const std::string &geom_id, const int &surf_indx, const vec3d &pt, const double &r0, const double &s0, const double &t0, double &r_out, double &s_out, double &t_out )
+{
+    Vehicle* vPtr = VehicleMgr.GetVehicle();
+    Geom * geom = vPtr->FindGeom( geom_id );
+
+    double dist = std::numeric_limits<double>::max();
+
+    if ( !geom )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "FindRST::Can't Find Geom " + geom_id );
+        return dist;
+    }
+
+    if ( surf_indx < 0 || surf_indx >= geom->GetNumTotalSurfs() )
+    {
+        ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "FindRST::Invalid Surface Index " + to_string( surf_indx ) );
+        return dist;
+    }
+
+    dist = geom->GetSurfPtr( surf_indx )->FindRST( pt, clamp( r0, 0.0, 1.0 ), clamp( s0, 0.0, 0.5 ), clamp( t0, 0.0, 1.0 ), r_out, s_out, t_out );
+
+    ErrorMgr.NoError();
+
+    return dist;
+}
+
+void ConvertRSTtoLMN( const std::string &geom_id, const int &surf_indx, const double &r, const double &s, const double &t, double &l, double &m, double &n )
+{
+    Vehicle* vPtr = VehicleMgr.GetVehicle();
+    Geom * geom = vPtr->FindGeom( geom_id );
+
+    if ( !geom )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "ConvertRSTtoLMN::Can't Find Geom " + geom_id );
+        return;
+    }
+
+    if ( surf_indx < 0 || surf_indx >= geom->GetNumTotalSurfs() )
+    {
+        ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "ConvertRSTtoLMN::Invalid Surface Index " + to_string( surf_indx ) );
+        return;
+    }
+
+    geom->GetSurfPtr( surf_indx )->ConvertRSTtoLMN( r, s, t, l, m, n );
+
+    ErrorMgr.NoError();
+
+    return;
+}
+
+void ConvertLMNtoRST( const std::string &geom_id, const int &surf_indx, const double &l, const double &m, const double &n, double &r, double &s, double &t )
+{
+    Vehicle* vPtr = VehicleMgr.GetVehicle();
+    Geom * geom = vPtr->FindGeom( geom_id );
+
+    if ( !geom )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "ConvertLMNtoRST::Can't Find Geom " + geom_id );
+        return;
+    }
+
+    if ( surf_indx < 0 || surf_indx >= geom->GetNumTotalSurfs() )
+    {
+        ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "ConvertLMNtoRST::Invalid Surface Index " + to_string( surf_indx ) );
+        return;
+    }
+
+    geom->GetSurfPtr( surf_indx )->ConvertLMNtoRST( l, m, n, r, s, t );
+
+    ErrorMgr.NoError();
+
+    return;
+}
+
 vector < vec3d > CompVecPnt01( const std::string &geom_id, const int &surf_indx, const vector < double > &us, const vector < double > &ws )
 {
     Vehicle* veh = GetVehicle();
@@ -7895,6 +8158,273 @@ void AxisProjVecPnt01Guess(const std::string &geom_id, const int &surf_indx, con
     ErrorMgr.NoError();
 }
 
+std::vector < bool > VecInsideSurf( const std::string &geom_id, const int &surf_indx, const std::vector < vec3d > &pts )
+{
+    Vehicle* veh = GetVehicle();
+
+    Geom* geom_ptr = veh->FindGeom( geom_id );
+
+    vector < bool > ret;
+    ret.resize( 0 );
+
+    if ( geom_ptr )
+    {
+        VspSurf *surf = geom_ptr->GetSurfPtr( surf_indx );
+
+        if ( surf )
+        {
+            ret.resize( pts.size(), false );
+
+            for ( int i = 0; i < pts.size(); i++ )
+            {
+                ret[i] = surf->IsInside( pts[i] );
+            }
+        }
+        else
+        {
+            ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "VecInsideSurf::Invalid surf index " + to_string( surf_indx ) );
+            return ret;
+        }
+    }
+    else
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "VecInsideSurf::Can't Find Geom " + geom_id );
+        return ret;
+    }
+    ErrorMgr.NoError();
+    return ret;
+}
+
+std::vector < vec3d > CompVecPntRST( const std::string &geom_id, const int &surf_indx, const std::vector < double > &rs, const std::vector < double > &ss, const std::vector < double > &ts )
+{
+    Vehicle* veh = GetVehicle();
+
+    Geom* geom_ptr = veh->FindGeom( geom_id );
+
+    vector < vec3d > pts;
+    pts.resize( 0 );
+
+    if ( geom_ptr )
+    {
+        if ( rs.size() == ss.size() && rs.size() == ts.size() )
+        {
+            VspSurf *surf = geom_ptr->GetSurfPtr( surf_indx );
+
+            if ( surf )
+            {
+                pts.resize( rs.size() );
+
+                for ( int i = 0; i < rs.size(); i++ )
+                {
+                    pts[i] = surf->CompPntRST( clamp( rs[i], 0.0, 1.0 ), clamp( ss[i], 0.0, 0.5 ), clamp( ts[i], 0.0, 1.0 ) );
+                }
+            }
+            else
+            {
+                ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "CompVecPntRST::Invalid surf index " + to_string( surf_indx ) );
+                return pts;
+            }
+        }
+        else
+        {
+            ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "CompVecPntRST::Input size mismatch." );
+            return pts;
+        }
+    }
+    else
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "CompVecPntRST::Can't Find Geom " + geom_id );
+        return pts;
+    }
+    ErrorMgr.NoError();
+    return pts;
+}
+
+void FindRSTVec( const std::string &geom_id, const int &surf_indx, const std::vector < vec3d > &pts, std::vector < double > &rs, std::vector < double > &ss, std::vector < double > &ts, std::vector < double > &ds )
+{
+    Vehicle* veh = GetVehicle();
+
+    Geom* geom_ptr = veh->FindGeom( geom_id );
+
+    rs.resize( 0 );
+    ss.resize( 0 );
+    ts.resize( 0 );
+    ds.resize( 0 );
+
+    if ( geom_ptr )
+    {
+        VspSurf *surf = geom_ptr->GetSurfPtr( surf_indx );
+
+        if ( surf )
+        {
+            rs.resize( pts.size() );
+            ss.resize( pts.size() );
+            ts.resize( pts.size() );
+            ds.resize( pts.size() );
+
+            surf->FindRST( pts, rs, ss, ts, ds );
+        }
+        else
+        {
+            ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "FindRSTVec::Invalid surf index " + to_string( surf_indx ) );
+            return;
+        }
+    }
+    else
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "FindRSTVec::Can't Find Geom " + geom_id );
+        return;
+    }
+    ErrorMgr.NoError();
+}
+
+void FindRSTVecGuess( const std::string &geom_id, const int &surf_indx, const std::vector < vec3d > &pts, const std::vector < double > &r0s, const std::vector < double > &s0s, const std::vector < double > &t0s, std::vector < double > &rs, std::vector < double > &ss, std::vector < double > &ts, std::vector < double > &ds )
+{
+    Vehicle* veh = GetVehicle();
+
+    Geom* geom_ptr = veh->FindGeom( geom_id );
+
+    rs.resize( 0 );
+    ss.resize( 0 );
+    ts.resize( 0 );
+    ds.resize( 0 );
+
+    if ( geom_ptr )
+    {
+        if ( pts.size() == r0s.size() && pts.size() == s0s.size() && pts.size() == t0s.size() )
+        {
+            VspSurf *surf = geom_ptr->GetSurfPtr(surf_indx);
+
+            if ( surf )
+            {
+                rs.resize( pts.size() );
+                ss.resize( pts.size() );
+                ts.resize( pts.size() );
+                ds.resize( pts.size() );
+
+                for ( int i = 0; i < pts.size(); i++ )
+                {
+                    ds[i] = surf->FindRST( pts[i], clamp( r0s[i], 0.0, 1.0 ), clamp( s0s[i], 0.0, 0.5 ), clamp( t0s[i], 0.0, 1.0 ), rs[i], ss[i], ts[i] );
+                }
+            }
+            else
+            {
+                ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "FindRSTVecGuess::Invalid surf index " + to_string( surf_indx ) );
+                return;
+            }
+        }
+        else
+        {
+            ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "FindRSTVecGuess::Input size mismatch." );
+            return;
+        }
+    }
+    else
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "FindRSTVecGuess::Can't Find Geom " + geom_id );
+        return;
+    }
+    ErrorMgr.NoError();
+}
+
+void ConvertRSTtoLMNVec( const std::string &geom_id, const int &surf_indx,
+                      const std::vector < double > &r_vec, const std::vector < double > &s_vec, const std::vector < double > &t_vec,
+                      std::vector < double > &l_out_vec, std::vector < double > &m_out_vec, std::vector < double > &n_out_vec )
+{
+    Vehicle* veh = GetVehicle();
+
+    Geom* geom_ptr = veh->FindGeom( geom_id );
+
+    l_out_vec.resize( 0 );
+    m_out_vec.resize( 0 );
+    n_out_vec.resize( 0 );
+
+    if ( geom_ptr )
+    {
+        if ( r_vec.size() == s_vec.size() && r_vec.size() == t_vec.size() )
+        {
+            VspSurf *surf = geom_ptr->GetSurfPtr(surf_indx);
+
+            if ( surf )
+            {
+                l_out_vec.resize( r_vec.size() );
+                m_out_vec.resize( r_vec.size() );
+                n_out_vec.resize( r_vec.size() );
+
+                for ( int i = 0; i < r_vec.size(); i++ )
+                {
+                    surf->ConvertRSTtoLMN( r_vec[i], s_vec[i], t_vec[i], l_out_vec[i], m_out_vec[i], n_out_vec[i] );
+                }
+            }
+            else
+            {
+                ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "ConvertRSTtoLMN::Invalid surf index " + to_string( surf_indx ) );
+                return;
+            }
+        }
+        else
+        {
+            ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "ConvertRSTtoLMN::Input size mismatch." );
+            return;
+        }
+    }
+    else
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "ConvertRSTtoLMN::Can't Find Geom " + geom_id );
+        return;
+    }
+    ErrorMgr.NoError();
+}
+
+void ConvertLMNtoRSTVec( const std::string &geom_id, const int &surf_indx,
+                      const std::vector < double > &l_vec, const std::vector < double > &m_vec, const std::vector < double > &n_vec,
+                      std::vector < double > &r_out_vec, std::vector < double > &s_out_vec, std::vector < double > &t_out_vec )
+{
+    Vehicle* veh = GetVehicle();
+
+    Geom* geom_ptr = veh->FindGeom( geom_id );
+
+    r_out_vec.resize( 0 );
+    s_out_vec.resize( 0 );
+    t_out_vec.resize( 0 );
+
+    if ( geom_ptr )
+    {
+        if ( l_vec.size() == m_vec.size() && l_vec.size() == n_vec.size() )
+        {
+            VspSurf *surf = geom_ptr->GetSurfPtr(surf_indx);
+
+            if ( surf )
+            {
+                r_out_vec.resize( l_vec.size() );
+                s_out_vec.resize( l_vec.size() );
+                t_out_vec.resize( l_vec.size() );
+
+                for ( int i = 0; i < l_vec.size(); i++ )
+                {
+                    surf->ConvertRSTtoLMN( l_vec[i], m_vec[i], n_vec[i], r_out_vec[i], s_out_vec[i], t_out_vec[i] );
+                }
+            }
+            else
+            {
+                ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "ConvertLMNtoRST::Invalid surf index " + to_string( surf_indx ) );
+                return;
+            }
+        }
+        else
+        {
+            ErrorMgr.AddError( VSP_INDEX_OUT_RANGE, "ConvertLMNtoRST::Input size mismatch." );
+            return;
+        }
+    }
+    else
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "ConvertLMNtoRST::Can't Find Geom " + geom_id );
+        return;
+    }
+    ErrorMgr.NoError();
+}
+
 void GetUWTess01(const std::string &geom_id, const int &surf_indx, std::vector < double > &u_out_vec, std::vector < double > &w_out_vec)
 {
     Vehicle* veh = GetVehicle();
@@ -7958,6 +8488,11 @@ void DelProbe( const string &id )
 void DeleteAllProbes()
 {
     MeasureMgr.DelAllProbes();
+}
+
+string GetVSPVersion()
+{
+    return VSPVERSION4;
 }
 
 string GetVSPExePath()

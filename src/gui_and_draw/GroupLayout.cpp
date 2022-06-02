@@ -793,7 +793,7 @@ void GroupLayout::AddOutput( StringOutput& string_output)
     AddY( m_StdHeight );
     NewLineX();
 
-    string_output.Init( m_Screen, output );
+    string_output.Init( m_Screen, output, NULL );
 }
 
 //==== Create & Init Text Output  ====//
@@ -802,7 +802,7 @@ void GroupLayout::AddOutput( StringOutput& string_output, const char* label, int
     assert( m_Group && m_Screen );
 
     //==== Button ====//
-    AddParmButton( label );
+    VspButton* button = AddParmButton( label );
 
     //==== Add Text Input ====//
     int iw = FitWidth( m_ButtonWidth + used_w, m_InputWidth );
@@ -818,7 +818,7 @@ void GroupLayout::AddOutput( StringOutput& string_output, const char* label, int
     AddY( m_StdHeight );
     NewLineX();
 
-    string_output.Init( m_Screen, output );
+    string_output.Init( m_Screen, output, button );
 }
 
 void GroupLayout::AddOutput( Output& output, const char* label, const char* format, int used_w )
@@ -847,7 +847,7 @@ void GroupLayout::AddOutput( Output& output, const char* label, const char* form
 }
 
 //==== Create & Init Float Input  ====//
-void GroupLayout::AddInput( Input& input, const char* label, const char* format )
+void GroupLayout::AddInput( Input& input, const char* label, const char* format, int used_w )
 {
     assert( m_Group && m_Screen );
 
@@ -855,7 +855,7 @@ void GroupLayout::AddInput( Input& input, const char* label, const char* format 
     VspButton* button = AddParmButton( label );
 
     //==== Add Text Input ====//
-    int iw = FitWidth( m_ButtonWidth, m_InputWidth );
+    int iw = FitWidth( m_ButtonWidth + used_w, m_InputWidth );
     Fl_Input* flinput = new Fl_Input( m_X, m_Y, iw, m_StdHeight );
 #ifdef NOREGEXP
     flinput->type( FL_FLOAT_INPUT );
@@ -870,6 +870,11 @@ void GroupLayout::AddInput( Input& input, const char* label, const char* format 
     NewLineX();
 
     input.Init( m_Screen, flinput, format, button );
+
+    if( strcmp( label, "AUTO_UPDATE" ) == 0 || strcmp( label, "" ) == 0 )
+    {
+        input.SetButtonNameUpdate( true );
+    }
 }
 
 void GroupLayout::AddInputEvenSpacedVector(Input& start_input, Input& end_input, Input& npts_input,const char * label,const char * format)

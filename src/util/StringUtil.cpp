@@ -113,6 +113,12 @@ void StringUtil::remove_trailing( string & str, char c )
     }
 }
 
+void StringUtil::remove_leading_trailing( string & str, char c )
+{
+    remove_leading( str, c );
+    remove_trailing( str, c );
+}
+
 //==== Convert Int To String =====//
 string StringUtil::int_to_string( int i, const char* format )
 {
@@ -198,4 +204,84 @@ string StringUtil::truncateFileName( const string &fn, int len )
         trunc.replace( 0, 3, "..." );
     }
     return trunc;
+}
+
+
+string StringUtil::NasFmt( double input )
+{
+    double ainput = std::abs( input );
+    if ( input > 0 )  // Positive branch
+    {
+        if ( ainput < 0.001 )  // Small magnitude, scientific notation
+        {
+            return string( "%8.2e" );
+        }
+        else if ( ainput < 10.0 )
+        {
+            return string( "%8.6f" );
+        }
+        else if ( ainput < 100.0 )
+        {
+            return string( "%8.5f" );
+        }
+        else if ( ainput < 1000.0 )
+        {
+            return string( "%8.4f" );
+        }
+        else if ( ainput < 10000.0 )
+        {
+            return string( "%8.3f" );
+        }
+        else if ( ainput < 100000.0 )
+        {
+            return string( "%8.2f" );
+        }
+        else if ( ainput < 1000000.0 )
+        {
+            return string( "%8.1f" );
+        }
+        else if ( ainput < 10000000.0 )
+        {
+            return string( "%7.0f." ); // Shrink and pad with decimal
+        }
+        else
+        {
+            return string( "%8.2e" );  // Big magnitude, scientific notation
+        }
+    }
+    else
+    {
+        if ( ainput < 0.001 )  // Small magnitude, scientific notation
+        {
+            return string( "%8.1e" );
+        }
+        else if ( ainput < 10.0 )
+        {
+            return string( "%8.5f" );
+        }
+        else if ( ainput < 100.0 )
+        {
+            return string( "%8.4f" );
+        }
+        else if ( ainput < 1000.0 )
+        {
+            return string( "%8.3f" );
+        }
+        else if ( ainput < 10000.0 )
+        {
+            return string( "%8.2f" );
+        }
+        else if ( ainput < 100000.0 )
+        {
+            return string( "%8.1f" );
+        }
+        else if ( ainput < 1000000.0 )
+        {
+            return string( "%7.0f." ); // Shrink and pad with decimal
+        }
+        else
+        {
+            return string( "%8.1e" );
+        }
+    }
 }

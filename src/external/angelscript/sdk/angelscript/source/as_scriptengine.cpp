@@ -1376,7 +1376,9 @@ int asCScriptEngine::GetFactoryIdByDecl(const asCObjectType *ot, const char *dec
 	for( asUINT n = 0; n < ot->beh.factories.GetLength(); n++ )
 	{
 		asCScriptFunction *f = scriptFunctions[ot->beh.factories[n]];
-		if( f->IsSignatureEqual(&func) )
+
+		// We don't really care if the name of the function is correct
+		if( f->IsSignatureExceptNameEqual(&func) )
 		{
 			id = ot->beh.factories[n];
 			break;
@@ -2191,7 +2193,9 @@ int asCScriptEngine::RegisterBehaviourToObjectType(asCObjectType *objectType, as
 		}
 
 		// Verify the parameters
-		if( func.parameterTypes.GetLength() != 1 || !func.parameterTypes[0].IsReference() )
+		// The templates take a hidden parameter with the object type
+		if( (!(objectType->flags & asOBJ_TEMPLATE) && (func.parameterTypes.GetLength() != 1 || !func.parameterTypes[0].IsReference())) || 
+			((objectType->flags & asOBJ_TEMPLATE) && (func.parameterTypes.GetLength() != 2 || !func.parameterTypes[0].IsReference() || !func.parameterTypes[1].IsReference())) )
 		{
 			if( listPattern )
 				listPattern->Destroy(this);

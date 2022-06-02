@@ -13,7 +13,9 @@
 #include "MeshAnalysis.h"
 
 #ifdef DEBUG_CFD_MESH
-#include <direct.h>
+// #include <direct.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #endif
 
 
@@ -26,14 +28,6 @@ CfdMeshMgrSingleton::CfdMeshMgrSingleton() : SurfaceIntersectionSingleton()
     m_MeshInProgress = false;
 
     m_MessageName = "CFDMessage";
-
-#ifdef DEBUG_CFD_MESH
-    m_DebugDir  = Stringc( "MeshDebug/" );
-    _mkdir( m_DebugDir.get_char_star() );
-    m_DebugFile = fopen( "MeshDebug/log.txt", "w" );
-    m_DebugDraw = false;
-#endif
-
 }
 
 CfdMeshMgrSingleton::~CfdMeshMgrSingleton()
@@ -53,6 +47,11 @@ void CfdMeshMgrSingleton::GenerateMesh()
 {
     m_MeshInProgress = true;
 
+#ifdef DEBUG_TIME_OUTPUT
+    addOutputText( "Init Timer\n" );
+#endif
+
+    addOutputText( "Transfer Mesh Settings\n" );
     TransferMeshSettings();
 
     addOutputText( "Fetching Bezier Surfaces\n" );
@@ -62,21 +61,26 @@ void CfdMeshMgrSingleton::GenerateMesh()
 
     // UpdateSourcesAndWakes must be before m_Vehicle->HideAll() to prevent components 
     // being being added to or removed from the CFD Mesh set
+    addOutputText( "Update Sources And Wakes\n" );
     UpdateSourcesAndWakes();
     WakeMgr.SetStretchMeshFlag( true );
 
     // Hide all geoms after fetching their surfaces
     m_Vehicle->HideAll();
 
+    addOutputText( "Cleanup\n" );
     CleanUp();
+
     addOutputText( "Loading Bezier Surfaces\n" );
     LoadSurfs( xfersurfs );
 
     if ( GetSettingsPtr()->m_IntersectSubSurfs )
     {
+        addOutputText( "Transfer Subsurface Data\n" );
         TransferSubSurfData();
     }
 
+    addOutputText( "Clean Merge Surfaces\n" );
     CleanMergeSurfs();
 
     if ( m_SurfVec.size() == 0 )
@@ -86,15 +90,17 @@ void CfdMeshMgrSingleton::GenerateMesh()
         return;
     }
 
+    addOutputText( "Update Domain\n" );
     UpdateDomain();
+
+    addOutputText( "Build Domain\n" );
     BuildDomain();
 
     addOutputText( "Build Grid\n" );
     BuildGrid();
 
-    addOutputText( "Intersect\n" );
+    // addOutputText( "Intersect\n" ); // Output in intersect() itself.
     Intersect();
-    addOutputText( "Finished Intersect\n" );
 
     addOutputText( "Binary Adaptation Curve Approximation\n" );
     BinaryAdaptIntCurves();
@@ -102,18 +108,20 @@ void CfdMeshMgrSingleton::GenerateMesh()
     addOutputText( "Build Target Map\n" );
     BuildTargetMap( CfdMeshMgrSingleton::VOCAL_OUTPUT );
 
-    addOutputText( "InitMesh\n" );
+    // addOutputText( "InitMesh\n" ); // Output inside InitMesh
     InitMesh( );
 
+    addOutputText( "Sub Tag tris\n" );
     SubTagTris();
 
     addOutputText( "Remesh\n" );
     Remesh( CfdMeshMgrSingleton::VOCAL_OUTPUT );
 
     //addOutputText( "Triangle Quality\n");
-    //Stringc qual = CfdMeshMgr.GetQualString();
-    //addOutputText( qual.get_char_star() );
+    //string qual = CfdMeshMgr.GetQualString();
+    //addOutputText( qual.c_str() );
 
+    addOutputText( "Build Single Tag Map\n" );
     SubSurfaceMgr.BuildSingleTagMap();
 
     addOutputText( "Exporting Files\n" );
@@ -2232,13 +2240,13 @@ void CfdMeshMgrSingleton::InitMesh( )
 
     if ( PrintProgress )
     {
-        printf( "MatchWakes\n" );
+        addOutputText( "MatchWakes\n" );
     }
     MatchWakes();
 
     if ( PrintProgress )
     {
-        printf( "TessellateChains\n" );
+        addOutputText( "TessellateChains\n" );
     }
     TessellateChains();
 
@@ -2246,7 +2254,7 @@ void CfdMeshMgrSingleton::InitMesh( )
 
     if ( PrintProgress )
     {
-        printf( "MergeBorderEndPoints\n" );
+        addOutputText( "MergeBorderEndPoints\n" );
     }
     MergeBorderEndPoints();
 
@@ -2254,19 +2262,25 @@ void CfdMeshMgrSingleton::InitMesh( )
 
     if ( PrintProgress )
     {
-        printf( "BuildMesh\n" );
+        // addOutputText( "BuildMesh\n" );  Output in BuildMesh
     }
     BuildMesh();
 
     if ( PrintProgress )
     {
-        printf( "RemoveInteriorTris\n" );
+        addOutputText( "RemoveInteriorTris\n" );
     }
     RemoveInteriorTris();
 
     if ( PrintProgress )
     {
-        printf( "ConnectBorderEdges\n" );
+        addOutputText( "RemoveTrimTris\n" );
+    }
+    RemoveTrimTris();
+
+    if ( PrintProgress )
+    {
+        addOutputText( "ConnectBorderEdges\n" );
     }
     ConnectBorderEdges( false );        // No Wakes
     ConnectBorderEdges( true );         // Only Wakes
@@ -2440,41 +2454,54 @@ void CfdMeshMgrSingleton::AddSurfaceChain( Surf* sPtr, ISegChain* chainIn )
 
 void CfdMeshMgrSingleton::MergeBorderEndPoints()
 {
-    //==== Load Chain End Points into Groups - Border Points First ====//
-    list< ISegChain* >::iterator c;
-    list < IPntGroup* > iPntGroupList;
-    for ( c = m_ISegChainList.begin() ; c != m_ISegChainList.end(); ++c )
-    {
-        if ( ( *c )->m_BorderFlag )
-        {
-            iPntGroupList.push_back( new IPntGroup );
-            m_DelIPntGroupVec.push_back( iPntGroupList.back() );
-            iPntGroupList.back()->m_IPntVec.push_back( ( *c )->m_TessVec.front() ); // Add Front Point
-            iPntGroupList.push_back( new IPntGroup );
-            m_DelIPntGroupVec.push_back( iPntGroupList.back() );
-            iPntGroupList.back()->m_IPntVec.push_back( ( *c )->m_TessVec.back() );  // Add Back Point
+    IPntCloud cloud;
+    cloud.m_IPnts.reserve( m_ISegChainList.size() * 2 );
 
-        }
-    }
-    //==== Add Rest of Chain Points ====//
+    list< ISegChain* >::iterator c;
     for ( c = m_ISegChainList.begin() ; c != m_ISegChainList.end(); ++c )
     {
-        if ( !( *c )->m_BorderFlag )
-        {
-            iPntGroupList.push_back( new IPntGroup );
-            m_DelIPntGroupVec.push_back( iPntGroupList.back() );
-            iPntGroupList.back()->m_IPntVec.push_back( ( *c )->m_TessVec.front() ); // Add Front Point
-            iPntGroupList.push_back( new IPntGroup );
-            m_DelIPntGroupVec.push_back( iPntGroupList.back() );
-            iPntGroupList.back()->m_IPntVec.push_back( ( *c )->m_TessVec.back() );  // Add Back Point
-        }
+        cloud.m_IPnts.push_back( ( *c )->m_TessVec.front() ); // Add Front Point
+        cloud.m_IPnts.push_back( ( *c )->m_TessVec.back() );  // Add Back Point
     }
 
     // tol_fract previously was compared to the distance between groups as a fraction of the local edge length.
     // However, it currently is simply compared to the distance between groups.
     // Consequently, while a reasonable value was previously 1e-2, a much smaller value is now appropriate.
-    double tol_fract = GetGridDensityPtr()->m_MinLen / 100.0;
-    MergeIPntGroups( iPntGroupList, tol_fract );
+    double tol = GetGridDensityPtr()->m_MinLen / 100.0;
+
+    MergeEndPointCloud( cloud, tol );
+}
+
+void CfdMeshMgrSingleton::MergeEndPointCloud( IPntCloud &cloud, double tol )
+{
+    list< ISegChain* >::iterator c;
+
+    IPntTree index( 3, cloud, KDTreeSingleIndexAdaptorParams( 10 ) );
+    index.buildIndex();
+
+    list < IPntGroup* > iPntGroupList;
+
+    for ( size_t i = 0 ; i < cloud.m_IPnts.size() ; i++ )
+    {
+        if ( cloud.m_IPnts[i]->m_GroupedFlag == false )
+        {
+            iPntGroupList.push_back( new IPntGroup );
+            m_DelIPntGroupVec.push_back( iPntGroupList.back() );
+
+            std::vector < std::pair < unsigned int, double > > ret_matches;
+
+            nanoflann::SearchParams params;
+            index.radiusSearch( &cloud.m_IPnts[i]->m_Pnt[0], tol, ret_matches, params );
+
+            for ( size_t j = 0 ; j < ret_matches.size() ; j++ )
+            {
+                unsigned int m_ind = ret_matches[j].first;
+                cloud.m_IPnts[ m_ind ]->m_GroupedFlag = true;
+                iPntGroupList.back()->m_IPntVec.push_back( cloud.m_IPnts[ m_ind ] );
+            }
+        }
+    }
+
 
     //==== Merge Ipnts In Groups ====//
     list< IPntGroup* >::iterator g;
@@ -2525,53 +2552,10 @@ void CfdMeshMgrSingleton::MergeBorderEndPoints()
     }
 }
 
-void CfdMeshMgrSingleton::MergeIPntGroups( list< IPntGroup* > & iPntGroupList, double tol_fract )
-{
-    //===== Merge Two Closest Groups While Under Tol ====//
-    IPntGroup* nearG1 = NULL;
-    IPntGroup* nearG2 = NULL;
-    double nearDistFract;
-    bool stopFlag = false;
-    while( !stopFlag )
-    {
-        stopFlag = true;
-        nearDistFract = 1.0e12;
-
-        //==== Find Closest Two Groups ====//
-        list< IPntGroup* >::iterator g;
-        for ( g = iPntGroupList.begin() ; g != iPntGroupList.end(); ++g )
-        {
-            list< IPntGroup* >::iterator h;
-            for ( h = iPntGroupList.begin() ; h != iPntGroupList.end(); ++h )
-            {
-                if ( ( *g ) != ( *h ) )
-                {
-                    double df = ( *g )->GroupDist( ( *h ) );
-                    if ( df < nearDistFract )
-                    {
-                        nearDistFract = df;
-                        nearG1 = ( *g );
-                        nearG2 = ( *h );
-                    }
-                }
-            }
-        }
-
-        if ( nearDistFract < tol_fract )
-        {
-            if ( nearG1 && nearG2 )
-            {
-                nearG1->AddGroup( nearG2 );
-            }
-//          delete nearG2;
-            iPntGroupList.remove( nearG2 );
-            stopFlag = false;
-        }
-    }
-}
-
 void CfdMeshMgrSingleton::BuildMesh()
 {
+    char str[256];
+
     //==== Mesh Each Surface ====//
     for ( int s = 0 ; s < ( int )m_SurfVec.size() ; s++ )
     {
@@ -2584,7 +2568,10 @@ void CfdMeshMgrSingleton::BuildMesh()
                 surf_chains.push_back( ( *c ) );
             }
         }
-        m_SurfVec[s]->InitMesh( surf_chains );
+
+        sprintf( str, "InitMesh %d/%d\n", s+1, m_SurfVec.size() );
+        addOutputText( str );
+        m_SurfVec[s]->InitMesh( surf_chains, this );
     }
 }
 

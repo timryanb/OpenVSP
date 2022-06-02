@@ -464,6 +464,12 @@ StructSettings::StructSettings() : MeshCommonSettings()
     m_DrawElementOrientVecFlag.Init( "DrawElementOrientVecFlag", "StructSettings", this, false, false, true );
     m_DrawElementOrientVecFlag.SetDescript( "Flag to Draw FeaElement Orientation Vectors" );
 
+    m_NodeOffset.Init( "NodeOffset", "StructSettings", this, 0, 0, 1e12 );
+    m_NodeOffset.SetDescript( "Offset to add to FEA node ID's for this structure" );
+
+    m_ElementOffset.Init( "ElementOffset", "StructSettings", this, 0, 0, 1e12 );
+    m_ElementOffset.SetDescript( "Offset to add to FEA element ID's for this structure" );
+
     ResetExportFileNames();
 }
 
@@ -521,7 +527,7 @@ void StructSettings::ResetExportFileNames()
 void StructSettings::ResetExportFileNames( const string& basename )
 {
     int pos;
-    const char *suffix[] = {"_mass.txt", "_NASTRAN.dat", "_NASTRAN.nkey", "_calculix.dat", ".stl", ".msh", ".srf", ".curv", ".p3d", ".igs", ".stp" };
+    const char *suffix[] = {"_mass.txt", "_NASTRAN.dat", "_NASTRAN.nkey", "_calculix.inp", ".stl", ".msh", ".srf", ".curv", ".p3d", ".igs", ".stp" };
 
     for ( int i = 0 ; i < vsp::FEA_NUM_FILE_NAMES; i++ )
     {

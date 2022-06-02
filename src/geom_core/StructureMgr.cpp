@@ -795,7 +795,7 @@ FeaMaterial* StructureMgrSingleton::AddFeaMaterial()
 
     if ( feamat )
     {
-        feamat->SetName( string( "Material" + std::to_string( m_FeaMatCount ) ) );
+        feamat->SetName( string( "Material" + std::to_string( m_FeaMatCount ) ), false ); // false is for removeslashes
         feamat->m_UserFeaMaterial = true;
         m_FeaMaterialVec.push_back( feamat );
         m_FeaMatCount++;
@@ -847,43 +847,37 @@ void StructureMgrSingleton::InitFeaMaterials()
 {
     // Note: Parm values set in FeaMaterial::Update()
 
-    FeaMaterial* aluminum_7075_T6 = new FeaMaterial();
+    int nmat = 15;
+    const char *matnames[] = {"Aluminum 7075-T6",
+                              "Aluminum 2024-T3",
+                              "Titanium Ti-6Al-4V",
+                              "AISI 4130 Steel",
+                              "Carbon Epoxy AS4 3501-6 [0_2/90]s",
+                              "Carbon Epoxy AS4 3501-6 [0/90]_2s",
+                              "Carbon Epoxy AS4 3501-6 [0/90/+-45]s",
+                              "Carbon Epoxy AS4 3501-6 [+-30]_2s",
+                              "Carbon Epoxy AS4 3501-6 [+-45]_2s",
+                              "Carbon Epoxy AS4 3501-6 [+-60]_2s",
+                              "Glass Epoxy S2 3501-6 [0_2/90]s",
+                              "Glass Epoxy S2 3501-6 [0/90]_2s",
+                              "Glass Epoxy S2 3501-6 [0/90/+-45]s",
+                              "Balsa LTR",
+                              "Sitka Spruce LTR"};
 
-    if ( aluminum_7075_T6 )
+    // These materials duplicate names above, but have different properties in the source.
+    // Keep these names here in case it gets sorted later and they need to be added.
+    /*
+            "Carbon Epoxy AS4 3501-6 [+-30]_2s",
+            "Carbon Epoxy AS4 3501-6 [+-45]_2s",
+            "Carbon Epoxy AS4 3501-6 [+-60]_2s",
+    */
+
+    for ( int i = 0; i < nmat; i++ )
     {
-        aluminum_7075_T6->SetName( "Aluminum 7075-T6" );
-        aluminum_7075_T6->m_UserFeaMaterial = false;
-        aluminum_7075_T6->Update();
-        AddFeaMaterial( aluminum_7075_T6 );
-    }
-
-    FeaMaterial* aluminum_2024_T3 = new FeaMaterial();
-
-    if ( aluminum_2024_T3 )
-    {
-        aluminum_2024_T3->SetName( "Aluminum 2024-T3" );
-        aluminum_2024_T3->m_UserFeaMaterial = false;
-        aluminum_2024_T3->Update();
-        AddFeaMaterial( aluminum_2024_T3 );
-    }
-
-    FeaMaterial* Ti_6Al_4V = new FeaMaterial();
-
-    if ( Ti_6Al_4V )
-    {
-        Ti_6Al_4V->SetName( "Titanium Ti-6Al-4V" );
-        Ti_6Al_4V->m_UserFeaMaterial = false;
-        Ti_6Al_4V->Update();
-        AddFeaMaterial( Ti_6Al_4V );
-    }
-
-    FeaMaterial* steel_4130 = new FeaMaterial();
-
-    if ( steel_4130 )
-    {
-        steel_4130->SetName( "AISI 4130 Steel" );
-        steel_4130->m_UserFeaMaterial = false;
-        steel_4130->Update();
-        AddFeaMaterial( steel_4130 );
+        FeaMaterial* mat = new FeaMaterial();
+        mat->SetName( matnames[i], false ); // false is for removeslashes
+        mat->m_UserFeaMaterial = false;
+        mat->Update();
+        AddFeaMaterial( mat );
     }
 }

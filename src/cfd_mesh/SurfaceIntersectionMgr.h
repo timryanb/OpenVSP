@@ -219,7 +219,7 @@ public:
     virtual void TransferSubSurfData();
     virtual vector < SimpleSubSurface > GetSimpSubSurfs( string geom_id, int surfnum, int comp_id );
 
-    void addOutputText( const string &str, int output_type = VOCAL_OUTPUT );
+    void addOutputText( string str, int output_type = VOCAL_OUTPUT );
 
 //  virtual void Draw();
 //  virtual void Draw_BBox( BndBox box );
@@ -259,7 +259,12 @@ public:
 //  virtual ISeg* CreateSurfaceSeg( Surf* sPtr, vec3d & p0, vec3d & p1, vec2d & uw0, vec2d & uw1 );
     virtual ISeg* CreateSurfaceSeg( Surf* surfA, vec2d & uwA0, vec2d & uwA1, Surf* surfB, vec2d & uwB0, vec2d & uwB1  );
 
+    virtual void WriteISegs();
     virtual void BuildChains();
+
+    void RefineISegChainSeg( ISegChain* c, IPnt* ipnt );
+    void RefineISegChain( ISegChain* c );
+
     virtual void ExpandChain( ISegChain* chain, PNTree* PN_tree );
 
     virtual void BuildCurves();
@@ -297,7 +302,6 @@ public:
     virtual void CheckFixPointIntersects()    {}; // Only for FeaMesh; do nothing for CfdMesh
     virtual void SetFixPointBorderNodes()    {}; // Only for FeaMesh; do nothing for CfdMesh
 
-    void TestStuff();
     vector< vec3d > debugPnts;
     vector< vec2d > debugUWs;
     vector< SurfPatch* > debugPatches;
@@ -321,7 +325,7 @@ public:
 
 #ifdef DEBUG_CFD_MESH
     FILE* m_DebugFile;
-    Stringc m_DebugDir;
+    string m_DebugDir;
 
     bool m_DebugDraw;
     vector< vector< vec3d > > m_DebugCurves;

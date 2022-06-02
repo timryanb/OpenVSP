@@ -17,7 +17,7 @@
 
 #include <FL/Fl.H>
 
-class StackScreen : public SkinScreen
+class StackScreen : public ChevronScreen
 {
 public:
     StackScreen( ScreenMgr* mgr );

@@ -14,6 +14,7 @@
 
 #include "VspCurve.h"
 #include "APIDefines.h"
+#include "StlHelper.h"
 
 #include "eli/geom/curve/length.hpp"
 #include "eli/geom/curve/piecewise_creator.hpp"
@@ -247,6 +248,50 @@ void octave_print( int figno, const piecewise_curve_type &pc )
 bool VspCurve::RoundJoint( double rad, int i )
 {
     return m_Curve.round( rad, i );
+}
+
+bool VspCurve::RoundJoint( double rad, double u )
+{
+    vector < double > umap;
+    m_Curve.get_pmap( umap );
+
+    int irnd = vector_find_val( umap, u );
+    if ( irnd > 0 )
+    {
+        return RoundJoint( rad, irnd );
+    }
+    return false;
+}
+
+bool VspCurve::RoundJoints( double rad, vector < double > uvec )
+{
+    vector < double > umap;
+
+    bool retval = true; // Assume all success
+    bool ret;
+
+    for ( int i = 0; i < uvec.size(); i++ )
+    {
+        // Allowing shifting of the curve start means some rounding can wrap-around the start/end point, thereby making
+        // it impossible to guarantee that the first parts of umap go unchanged.  Further complexity is not worthwhile,
+        // it is best to get get_pmap every time.
+        m_Curve.get_pmap( umap );
+        int irnd = vector_find_val( umap, uvec[i], 1e-8 );
+        if ( irnd >= 0 )
+        {
+            ret = RoundJoint( rad, irnd );
+        }
+        else
+        {
+            ret = false;
+        }
+
+        if ( !ret ) // Detect any failure.
+        {
+            retval = false;
+        }
+    }
+    return retval;
 }
 
 void VspCurve::Modify( int type, bool le, double len, double off, double str )
@@ -663,6 +708,42 @@ void VspCurve::GetCubicControlPoints( vector< vec3d >& cntrl_pts, vector< double
 
             cntrl_pts.push_back( p );
             param.push_back( tend );
+        }
+    }
+}
+
+void VspCurve::GetLinearControlPoints( vector< vec3d >& cntrl_pts, vector< double >& param )
+{
+    int nseg = m_Curve.number_segments();
+
+    int ncp = nseg + 1;
+
+    cntrl_pts.clear();
+    param.clear();
+
+    cntrl_pts.reserve( ncp );
+    param.reserve( ncp );
+
+    m_Curve.get_pmap( param );
+
+    for ( size_t i = 0; i < nseg; i++ )
+    {
+        curve_segment_type c;
+
+        m_Curve.get( c, i );
+
+        curve_point_type p;
+        p = c.get_control_point( 0 );
+
+        cntrl_pts.push_back( p );
+
+
+        if ( i == nseg - 1 )
+        {
+            curve_point_type p;
+            p = c.get_control_point( 1 );
+
+            cntrl_pts.push_back( p );
         }
     }
 }
@@ -1436,6 +1517,22 @@ void VspCurve::ScaleZ( double s )
     m_Curve.scale_z( s );
 }
 
+void VspCurve::ZeroI( int i )
+{
+    if ( i == 0 )
+    {
+        m_Curve.scale_x( 0.0 );
+    }
+    else if ( i == 1 )
+    {
+        m_Curve.scale_y( 0.0 );
+    }
+    else
+    {
+        m_Curve.scale_z( 0.0 );
+    }
+}
+
 void VspCurve::ReflectXY()
 {
     m_Curve.reflect_xy();
@@ -1703,7 +1800,7 @@ vector < BezierSegment > VspCurve::GetBezierSegments()
     return seg_vec;
 }
 
-void VspCurve::CreateRoundedRectangle( double w, double h, double k, double sk, double vsk, double & r1, double & r2, double & r3, double & r4, bool keycorner )
+void VspCurve::CreateRoundedRectangle( double w, double h, double k, double sk, double vsk, const double & r1, const double & r2, const double & r3, const double & r4, bool keycorner )
 {
     VspCurve edge;
     vector<vec3d> pt;

@@ -2475,7 +2475,7 @@ int VSPAEROMgrSingleton::WaitForFile( string filename )
     // Wait until the results show up on the file system
     int n_wait = 0;
     // wait no more than 5 seconds = (50*100)/1000
-    while ( ( !FileExist( filename ) ) & ( n_wait < 100 ) )
+    while ( ( !FileExist( filename ) ) && ( n_wait < 100 ) )
     {
         n_wait++;
         SleepForMilliseconds( 50 );
@@ -3321,7 +3321,7 @@ void VSPAEROMgrSingleton::ReadStabFile( string filename, vector <string> &res_id
     return;
 }
 
-vector <string> VSPAEROMgrSingleton::ReadDelimLine( FILE * fp, char * delimeters )
+vector <string> VSPAEROMgrSingleton::ReadDelimLine( FILE * fp, char * delimiters )
 {
 
     vector <string> dataStringVector;
@@ -3330,11 +3330,11 @@ vector <string> VSPAEROMgrSingleton::ReadDelimLine( FILE * fp, char * delimeters
     char strbuff[1024];                // buffer for entire line in file
     if ( fgets( strbuff, 1024, fp ) != NULL )
     {
-        char * pch = strtok ( strbuff, delimeters );
+        char * pch = strtok ( strbuff, delimiters );
         while ( pch != NULL )
         {
             dataStringVector.push_back( pch );
-            pch = strtok ( NULL, delimeters );
+            pch = strtok ( NULL, delimiters );
         }
     }
 
@@ -4474,7 +4474,7 @@ void VSPAEROMgrSingleton::UpdateAutoTimeStep()
     double NumSteps_1 = 2. * Period / dt + 1;
 
     // Fastest rotor does ABS(NumberOfTimeSteps_) revolutions
-    double NumSteps_2 = std::abs( num_dt ) * 24;
+    double NumSteps_2 = std::abs( num_dt ) * 20;
 
     if ( NumSteps_1 > NumSteps_2 )
     {
@@ -4492,7 +4492,7 @@ void VSPAEROMgrSingleton::UpdateAutoTimeStep()
     }
     else
     {
-        m_AutoTimeNumRevs.Set( int( ( m_NumTimeSteps() / 24 ) * m_TimeStepSize() / dt ) );
+        m_AutoTimeNumRevs.Set( int( ( m_NumTimeSteps() / 20.0 ) * m_TimeStepSize() / dt ) );
     }
 }
 

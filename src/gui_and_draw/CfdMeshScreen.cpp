@@ -44,6 +44,7 @@ CfdMeshScreen::CfdMeshScreen( ScreenMgr* mgr ) : TabScreen( mgr, 415, 642, "CFD 
     m_ConsoleDisplay = m_BorderConsoleLayout.AddFlTextDisplay( 115 );
     m_ConsoleBuffer = new Fl_Text_Buffer;
     m_ConsoleDisplay->buffer( m_ConsoleBuffer );
+    m_FLTK_Window->resizable( m_ConsoleDisplay );
 
     m_BorderConsoleLayout.AddYGap();
 
@@ -999,9 +1000,11 @@ void CfdMeshScreen::LoadSetChoice()
 
 void CfdMeshScreen::AddOutputText( const string &text )
 {
+    Fl::lock();
     m_ConsoleBuffer->append( text.c_str() );
     m_ConsoleDisplay->insert_position( m_ConsoleDisplay->buffer()->length() );
     m_ConsoleDisplay->show_insert_position();
+    Fl::unlock();
 }
 
 void CfdMeshScreen::LoadDrawObjs( vector< DrawObj* > &draw_obj_vec )

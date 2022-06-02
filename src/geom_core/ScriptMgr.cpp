@@ -23,6 +23,17 @@
 #include "StringUtil.h"
 #include "FileUtil.h"
 
+// Make sure int32_t is defined.
+#ifdef _MSC_VER
+    #if _MSC_VER >= 1600
+        #include <cstdint>
+    #else
+        typedef __int32 int32_t;
+    #endif
+#else
+    #include <cstdint>
+#endif
+
 using namespace vsp;
 
 //==== Implement a simple message callback function ====//
@@ -165,11 +176,11 @@ void ScriptMgrSingleton::RunTestScripts()
 }
 
 //==== Read And Execute Script File  ====//
-void ScriptMgrSingleton::ReadExecuteScriptFile( const string &  file_name, const string &  function_name )
+int ScriptMgrSingleton::ReadExecuteScriptFile( const string &  file_name, const string &  function_name )
 {
     string module_name = ReadScriptFromFile( "ReadExecute", file_name );
 
-    ExecuteScript( module_name.c_str(), function_name.c_str() );
+    return ExecuteScript( module_name.c_str(), function_name.c_str(), false, 0.0, false );
 }
 
 vector< string > ScriptMgrSingleton::ReadScriptsFromDir( const string & dir_name, const string & suffix )
@@ -296,23 +307,30 @@ bool ScriptMgrSingleton::RemoveScript( const string &  module_name )
 
 
 //==== Execute Function in Module ====//
-bool ScriptMgrSingleton::ExecuteScript(  const char* module_name,  const char* function_name, bool arg_flag, double arg )
+int ScriptMgrSingleton::ExecuteScript( const char* module_name, const char* function_name, bool arg_flag, double arg, bool by_decl )
 {
-    int r;
-
     // Find the function that is to be called.
     asIScriptModule *mod = m_ScriptEngine->GetModule( module_name );
 
     if ( !mod )
     {
         printf( "Error ExecuteScript GetModule %s\n", module_name );
-        return false;
+        return 1;
     }
 
-    asIScriptFunction *func = mod->GetFunctionByDecl( function_name );
+    asIScriptFunction *func = NULL;
+    if ( by_decl )
+    {
+        func = mod->GetFunctionByDecl( function_name );
+    }
+    else
+    {
+        func = mod->GetFunctionByName( function_name );
+    }
+
     if( func == 0 )
     {
-        return false;
+        return 1;
     }
 
     // Create our context, prepare it, and then execute
@@ -322,7 +340,7 @@ bool ScriptMgrSingleton::ExecuteScript(  const char* module_name,  const char* f
     {
         ctx->SetArgDouble( 0, arg );
     }
-    r = ctx->Execute();
+    int r = ctx->Execute();
     if( r != asEXECUTION_FINISHED )
     {
         // The execution didn't complete as expected. Determine what happened.
@@ -331,9 +349,13 @@ bool ScriptMgrSingleton::ExecuteScript(  const char* module_name,  const char* f
             // An exception occurred, let the script writer know what happened so it can be corrected.
             printf( "An exception '%s' occurred \n", ctx->GetExceptionString() );
         }
-        return false;
+        return 1;
     }
-    return true;
+
+    asDWORD ret = ctx->GetReturnDWord();
+    int32_t rval = ret;
+
+    return rval;
 }
 
 //==== Return Script Content Given Module Name ====//
@@ -738,6 +760,30 @@ void ScriptMgrSingleton::RegisterEnums( asIScriptEngine* se )
     r = se->RegisterEnumValue( "CF_TURB_EQN", "CF_TURB_HEATTRANSFER_WHITE_CHRISTOPH", CF_TURB_HEATTRANSFER_WHITE_CHRISTOPH, "/*!< Heat Transfer White-Christoph turbulent Cf equation. */" );
     assert( r >= 0 );
 
+    doc_struct.comment = "/*! Enum for Chevron curve modification types. */";
+
+    r = se->RegisterEnum( "CHEVRON_TYPE", doc_struct );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "CHEVRON_TYPE", "CHEVRON_NONE", CHEVRON_NONE, "/*!< No chevron. */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "CHEVRON_TYPE", "CHEVRON_PARTIAL", CHEVRON_PARTIAL, "/*!< One or more chevrons of limited extent. */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "CHEVRON_TYPE", "CHEVRON_FULL", CHEVRON_FULL, "/*!< Full period of chevrons. */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "CHEVRON_TYPE", "CHEVRON_NUM_TYPES", CHEVRON_NUM_TYPES, "/*!< Number of chevron types. */" );
+    assert( r >= 0 );
+
+    doc_struct.comment = "/*! Enum for Chevron W parameter modes. */";
+
+    r = se->RegisterEnum( "CHEVRON_W01_MODES", doc_struct );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "CHEVRON_W01_MODES", "CHEVRON_W01_SE", CHEVRON_W01_SE, "/*!< Specify chevron W start and end. */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "CHEVRON_W01_MODES", "CHEVRON_W01_CW", CHEVRON_W01_CW, "/*!< Specify chevron W center and width. */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "CHEVRON_W01_MODES", "CHEVRON_W01_NUM_MODES", CHEVRON_W01_NUM_MODES, "/*!< Number of chevron W parameter mode types. */" );
+    assert( r >= 0 );
+
     doc_struct.comment = "/*! Enum for Snap To collision error types. */";
 
     r = se->RegisterEnum( "COLLISION_ERRORS", doc_struct );
@@ -838,6 +884,8 @@ void ScriptMgrSingleton::RegisterEnums( asIScriptEngine* se )
     assert( r >= 0 );
     r = se->RegisterEnumValue( "DIR_INDEX", "Z_DIR", Z_DIR, "/*!< Z direction */" );
     assert( r >= 0 );
+    r = se->RegisterEnumValue( "DIR_INDEX", "ALL_DIR", ALL_DIR, "/*!< All directions */" );
+    assert( r >= 0 );
 
     doc_struct.comment = "/*! Enum for selecting the GUI display type for Geoms. */";
 
@@ -889,6 +937,8 @@ void ScriptMgrSingleton::RegisterEnums( asIScriptEngine* se )
     assert( r >= 0 );
     r = se->RegisterEnumValue( "ERROR_CODE", "VSP_FILE_WRITE_FAILURE", vsp::VSP_FILE_WRITE_FAILURE, "/*!< File write failure error */" );
     assert( r >= 0 );
+    r = se->RegisterEnumValue( "ERROR_CODE", "VSP_FILE_READ_FAILURE", vsp::VSP_FILE_READ_FAILURE, "/*!< File read failure error */" );
+    assert( r >= 0 );
     r = se->RegisterEnumValue( "ERROR_CODE", "VSP_WRONG_XSEC_TYPE", vsp::VSP_WRONG_XSEC_TYPE, "/*!< Wrong XSec type error */" );
     assert( r >= 0 );
     r = se->RegisterEnumValue( "ERROR_CODE", "VSP_WRONG_FILE_TYPE", vsp::VSP_WRONG_FILE_TYPE, "/*!< Wrong file type error */" );
@@ -914,6 +964,10 @@ void ScriptMgrSingleton::RegisterEnums( asIScriptEngine* se )
     r = se->RegisterEnumValue( "ERROR_CODE", "VSP_INVALID_INPUT_VAL", vsp::VSP_INVALID_INPUT_VAL, "/*!< Invalid input value error */" );
     assert( r >= 0 );
     r = se->RegisterEnumValue( "ERROR_CODE", "VSP_INVALID_CF_EQN", vsp::VSP_INVALID_CF_EQN, "/*!< Invalid friction coefficient equation error */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "ERROR_CODE", "VSP_INVALID_DRIVERS", vsp::VSP_INVALID_DRIVERS, "/*!< Invalid drivers for driver group */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "ERROR_CODE", "VSP_ADV_LINK_BUILD_FAIL", vsp::VSP_ADV_LINK_BUILD_FAIL, "/*!< Advanced link build failure */" );
     assert( r >= 0 );
 
     doc_struct.comment = "/*! Enum used to indicate Parasite Drag Tool excressence type. */";
@@ -1032,6 +1086,50 @@ void ScriptMgrSingleton::RegisterEnums( asIScriptEngine* se )
     r = se->RegisterEnumValue( "FEA_EXPORT_TYPE", "FEA_NUM_FILE_NAMES", FEA_NUM_FILE_NAMES, "/*!< Number of FEA Mesh export type. */" );
     assert( r >= 0 );
 
+    doc_struct.comment = "/*! Enum for FEA material types. */";
+
+    r = se->RegisterEnum( "FEA_MATERIAL_TYPE", doc_struct );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_MATERIAL_TYPE", "FEA_ISOTROPIC", FEA_ISOTROPIC, "/*!< Isotropic material */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_MATERIAL_TYPE", "FEA_ENG_ORTHO", FEA_ENG_ORTHO, "/*!< Orthotropic material in engineering parameters */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_MATERIAL_TYPE", "FEA_NUM_MAT_TYPES", FEA_NUM_MAT_TYPES, "/*!< Number of FEA material types */" );
+    assert( r >= 0 );
+
+    doc_struct.comment = "/*! Enum for FEA material orientation types. */";
+
+    r = se->RegisterEnum( "FEA_ORIENTATION_TYPE", doc_struct );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_GLOBAL_X", FEA_ORIENT_GLOBAL_X, "/*!< FEA Global X material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_GLOBAL_Y", FEA_ORIENT_GLOBAL_Y, "/*!< FEA Global Y material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_GLOBAL_Z", FEA_ORIENT_GLOBAL_Z, "/*!< FEA Global Z material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_COMP_X", FEA_ORIENT_COMP_X, "/*!< FEA Comp X material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_COMP_Y", FEA_ORIENT_COMP_Y, "/*!< FEA Comp Y material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_COMP_Z", FEA_ORIENT_COMP_Z, "/*!< FEA Comp Z material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_PART_U", FEA_ORIENT_PART_U, "/*!< FEA Part U material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_PART_V", FEA_ORIENT_PART_V, "/*!< FEA Part V material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_OML_U", FEA_ORIENT_OML_U, "/*!< FEA OML U material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_OML_V", FEA_ORIENT_OML_V, "/*!< FEA OML V material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_OML_R", FEA_ORIENT_OML_R, "/*!< FEA OML R material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_OML_S", FEA_ORIENT_OML_S, "/*!< FEA OML S material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_ORIENT_OML_T", FEA_ORIENT_OML_T, "/*!< FEA OML T material orientation */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_ORIENTATION_TYPE", "FEA_NUM_ORIENT_TYPES", FEA_NUM_ORIENT_TYPES, "/*!< Number of FEA material orientation types */" );
+    assert( r >= 0 );
+
     doc_struct.comment = "/*! Enum for FEA Part element types. */";
 
     r = se->RegisterEnum( "FEA_PART_ELEMENT_TYPE", doc_struct );
@@ -1041,6 +1139,10 @@ void ScriptMgrSingleton::RegisterEnums( asIScriptEngine* se )
     r = se->RegisterEnumValue( "FEA_PART_ELEMENT_TYPE", "FEA_BEAM", FEA_BEAM, "/*!< Beam FEA element type */" );
     assert( r >= 0 );
     r = se->RegisterEnumValue( "FEA_PART_ELEMENT_TYPE", "FEA_SHELL_AND_BEAM", FEA_SHELL_AND_BEAM, "/*!< Both Shell and Beam FEA element types */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_PART_ELEMENT_TYPE", "FEA_NO_ELEMENTS", FEA_NO_ELEMENTS, "/*!< FEA part with no elements */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_PART_ELEMENT_TYPE", "FEA_NUM_ELEMENT_TYPES", FEA_NUM_ELEMENT_TYPES, "/*!< Number of FEA element type choices */" );
     assert( r >= 0 );
 
     doc_struct.comment = "/*! Enum used to identify the available FEA Part types. */";
@@ -1060,6 +1162,8 @@ void ScriptMgrSingleton::RegisterEnums( asIScriptEngine* se )
     r = se->RegisterEnumValue( "FEA_PART_TYPE", "FEA_RIB_ARRAY", FEA_RIB_ARRAY, "/*!< Rib array FEA Part type */" );
     assert( r >= 0 );
     r = se->RegisterEnumValue( "FEA_PART_TYPE", "FEA_SLICE_ARRAY", FEA_SLICE_ARRAY, "/*!< Slice array FEA Part type */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "FEA_PART_TYPE", "FEA_TRIM", FEA_TRIM, "/*!< Trim FEA Part type */" );
     assert( r >= 0 );
     r = se->RegisterEnumValue( "FEA_PART_TYPE", "FEA_SKIN", FEA_SKIN, "/*!< Skin FEA Part type */" );
     assert( r >= 0 );
@@ -1618,6 +1722,8 @@ void ScriptMgrSingleton::RegisterEnums( asIScriptEngine* se )
     r = se->RegisterEnumValue( "SUBSURF_TYPE", "SS_CONTROL", SS_CONTROL, "/*!< Control sub-surface type */" );
     assert( r >= 0 );
     r = se->RegisterEnumValue( "SUBSURF_TYPE", "SS_LINE_ARRAY", SS_LINE_ARRAY, "/*!< Line array sub-surface type */" );
+    assert( r >= 0 );
+    r = se->RegisterEnumValue( "SUBSURF_TYPE", "SS_FINITE_LINE", SS_FINITE_LINE, "/*!< Finite line sub-surface type */" );
     assert( r >= 0 );
     r = se->RegisterEnumValue( "SUBSURF_TYPE", "SS_NUM_TYPES", SS_NUM_TYPES, "/*!< Number of sub-surface types */" );
     assert( r >= 0 );
@@ -7413,6 +7519,66 @@ void ScriptMgrSingleton::RegisterAPI( asIScriptEngine* se )
 
     doc_struct.comment = R"(
 /*!
+    Set the upper points for an airfoil. The XSec must be of type XS_FILE_AIRFOIL.
+    \code{.cpp}
+    // Add Fuselage Geom
+    string fuseid = AddGeom( "FUSELAGE", "" );
+
+    string xsec_surf = GetXSecSurf( fuseid, 0 );
+
+    ChangeXSecShape( xsec_surf, 1, XS_FILE_AIRFOIL );
+
+    string xsec = GetXSec( xsec_surf, 1 );
+
+    ReadFileAirfoil( xsec, "airfoil/N0012_VSP.af" );
+
+    array< vec3d > @up_array = GetAirfoilUpperPnts( xsec );
+
+    for ( int i = 0 ; i < int( up_array.size() ) ; i++ )
+    {
+        up_array[i].scale_y( 2.0 );
+    }
+
+    SetAirfoilUpperPnts( xsec, up_array );
+    \endcode
+    \param [in] xsec_id XSec ID
+    \param [in] up_pnt_vec Array of points defining the upper surface of the airfoil
+*/)";
+    r = se->RegisterGlobalFunction( "void SetAirfoilUpperPnts( const string& in xsec_id, array<vec3d>@ up_pnt_vec )", asMETHOD( ScriptMgrSingleton, SetAirfoilUpperPnts ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
+    Set the ower points for an airfoil. The XSec must be of type XS_FILE_AIRFOIL.
+    \code{.cpp}
+    // Add Fuselage Geom
+    string fuseid = AddGeom( "FUSELAGE", "" );
+
+    string xsec_surf = GetXSecSurf( fuseid, 0 );
+
+    ChangeXSecShape( xsec_surf, 1, XS_FILE_AIRFOIL );
+
+    string xsec = GetXSec( xsec_surf, 1 );
+
+    ReadFileAirfoil( xsec, "airfoil/N0012_VSP.af" );
+
+    array< vec3d > @low_array = GetAirfoilLowerPnts( xsec );
+
+    for ( int i = 0 ; i < int( low_array.size() ) ; i++ )
+    {
+        low_array[i].scale_y( 0.5 );
+    }
+
+    SetAirfoilUpperPnts( xsec, up_array );
+    \endcode
+    \param [in] xsec_id XSec ID
+    \param [in] low_pnt_vec Array of points defining the lower surface of the airfoil
+*/)";
+    r = se->RegisterGlobalFunction( "void SetAirfoilLowerPnts( const string& in xsec_id, array<vec3d>@ low_pnt_vec )", asMETHOD( ScriptMgrSingleton, SetAirfoilLowerPnts ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
     Set the upper and lower points for an airfoil. The XSec must be of type XS_FILE_AIRFOIL.
     \code{.cpp}
     // Add Fuselage Geom
@@ -7997,7 +8163,15 @@ void ScriptMgrSingleton::RegisterAPI( asIScriptEngine* se )
     u_vec[3] = 0.75;
     u_vec[4] = 1.0;
 
-    SetEditXSecPnts( xsec_2, u_vec, xsec2_pts ); // Note: points are unscaled by the width and height parms
+    array < double > r_vec(5);
+
+    r_vec[0] = 0.0;
+    r_vec[1] = 0.0;
+    r_vec[2] = 0.0;
+    r_vec[3] = 0.0;
+    r_vec[4] = 0.0;
+
+    SetEditXSecPnts( xsec_2, u_vec, xsec2_pts, r_vec ); // Note: points are unscaled by the width and height parms
 
     array < vec3d > new_pnts = GetEditXSecCtrlVec( xsec_2, true ); // The returned control points will not be scaled by width and height
     
@@ -8008,9 +8182,10 @@ void ScriptMgrSingleton::RegisterAPI( asIScriptEngine* se )
     \endcode
     \param [in] xsec_id XSec ID
     \param [in] u_vec Array of U parameter values
+    \param [in] r_vec Array of R parameter values
     \param [in] control_pts Nondimensionalized array of control points
 */)";
-    r = se->RegisterGlobalFunction( "void SetEditXSecPnts( const string& in xsec_id, array<double>@ u_vec, array<vec3d>@ control_pts )", asMETHOD( ScriptMgrSingleton, SetEditXSecPnts ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct );
+    r = se->RegisterGlobalFunction( "void SetEditXSecPnts( const string& in xsec_id, array<double>@ u_vec, array<vec3d>@ control_pts, array<double>@ r_vec )", asMETHOD( ScriptMgrSingleton, SetEditXSecPnts ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct );
     assert( r >= 0 );
 
     doc_struct.comment = R"(
@@ -8389,6 +8564,59 @@ void ScriptMgrSingleton::RegisterAPI( asIScriptEngine* se )
     \param [in] file_name Airfoil XSec file name
 */)";
     r = se->RegisterGlobalFunction( "void ReadBORFileAirfoil( const string& in bor_id, const string& in file_name )", asFUNCTION( vsp::ReadBORFileAirfoil ), asCALL_CDECL, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
+    Set the upper points for an airfoil on a BOR. The BOR XSecCurve must be of type XS_FILE_AIRFOIL.
+    \code{.cpp}
+    // Add Body of Recolution
+    string bor_id = AddGeom( "BODYOFREVOLUTION", "" );
+
+    ChangeBORXSecShape( bor_id, XS_FILE_AIRFOIL );
+
+    ReadBORFileAirfoil( bor_id, "airfoil/N0012_VSP.af" );
+
+    array< vec3d > @up_array = GetBORAirfoilUpperPnts( bor_id );
+
+    for ( int i = 0 ; i < int( up_array.size() ) ; i++ )
+    {
+        up_array[i].scale_y( 2.0 );
+    }
+
+    SetBORAirfoilUpperPnts( bor_id, up_array );
+    \endcode
+    \param [in] bor_id Geom ID of BOR
+    \param [in] up_pnt_vec Array of points defining the upper surface of the airfoil
+*/)";
+    r = se->RegisterGlobalFunction( "void SetBORAirfoilUpperPnts( const string& in bor_id, array<vec3d>@ up_pnt_vec )", asMETHOD( ScriptMgrSingleton, SetBORAirfoilUpperPnts ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct );
+    assert( r >= 0 );
+
+
+    doc_struct.comment = R"(
+/*!
+    Set the lower points for an airfoil on a BOR. The BOR XSecCurve must be of type XS_FILE_AIRFOIL.
+    \code{.cpp}
+    // Add Body of Recolution
+    string bor_id = AddGeom( "BODYOFREVOLUTION", "" );
+
+    ChangeBORXSecShape( bor_id, XS_FILE_AIRFOIL );
+
+    ReadBORFileAirfoil( bor_id, "airfoil/N0012_VSP.af" );
+
+    array< vec3d > @low_array = GetBORAirfoilLowerPnts( bor_id );
+
+    for ( int i = 0 ; i < int( low_array.size() ) ; i++ )
+    {
+        low_array[i].scale_y( 0.5 );
+    }
+
+    SetBORAirfoilLowerPnts( bor_id, low_array );
+    \endcode
+    \param [in] bor_id Geom ID of BOR
+    \param [in] low_pnt_vec Array of points defining the lower surface of the airfoil
+*/)";
+    r = se->RegisterGlobalFunction( "void SetBORAirfoilLowerPnts( const string& in bor_id, array<vec3d>@ low_pnt_vec )", asMETHOD( ScriptMgrSingleton, SetBORAirfoilLowerPnts ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct );
     assert( r >= 0 );
 
     doc_struct.comment = R"(
@@ -10607,6 +10835,325 @@ void ScriptMgrSingleton::RegisterAPI( asIScriptEngine* se )
 
     doc_struct.comment = R"(
 /*!
+    Test whether a given point is inside a specified surface.
+
+    \code{.cpp}
+    // Add Pod Geom
+    string geom_id = AddGeom( "POD", "" );
+
+    int surf_indx = 0;
+
+    double r = 0.12;
+    double s = 0.34;
+    double t = 0.56;
+
+    vec3d pnt = CompPntRST( geom_id, surf_indx, r, s, t );
+
+    bool res = InsideSurf( geom_id, surf_indx, pt );
+
+    if ( res )
+    {
+        print( "Inside" );
+    }
+    else
+    {
+        print( "Outside" );
+    }
+
+    \endcode
+    \sa VecInsideSurf
+    \param [in] geom_id Parent Geom ID
+    \param [in] surf_indx Main surface index from the parent Geom
+    \param [in] pt Input 3D coordinate point
+    \return Boolean true if the point is inside the surface, false otherwise.
+*/)";
+    r = se->RegisterGlobalFunction( "bool InsideSurf( const string & in geom_id, const int & in surf_indx, const vec3d & in pt )", asFUNCTION(vsp::InsideSurf), asCALL_CDECL, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
+    Determine the nearest (R, S, T) volume coordinate for an input (X, Y, Z) 3D coordinate point and calculate the distance between the
+    3D point and the found volume point.
+    \code{.cpp}
+    // Add Pod Geom
+    string geom_id = AddGeom( "POD", "" );
+
+    int surf_indx = 0;
+
+    double r = 0.12;
+    double s = 0.34;
+    double t = 0.56;
+
+    vec3d pnt = CompPntRST( geom_id, surf_indx, r, s, t );
+
+    double rout, sout, tout;
+
+    double d = FindRST( geom_id, surf_indx, pnt, rout, sout, tout );
+
+    Print( "Dist " + d + " r " + rout + " s " + sout + " t " + tout );
+    \endcode
+    \sa FindRSTGuess
+    \param [in] geom_id Parent Geom ID
+    \param [in] surf_indx Main surface index from the parent Geom
+    \param [in] pt Input 3D coordinate point
+    \param [out] r Output closest R (0 - 1.0) volume coordinate
+    \param [out] s Output closest S (0 - 0.5) volume coordinate
+    \param [out] t Output closest T (0 - 1.0) volume coordinate
+    \return Distance between the 3D point and the closest point of the volume
+*/)";
+    r = se->RegisterGlobalFunction( "double FindRST( const string & in geom_id, const int & in surf_indx, const vec3d & in pt, double & out r, double & out s, double & out t )", asFUNCTION(vsp::FindRST), asCALL_CDECL, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
+    Determine the nearest (R, S, T) volume coordinate for an input (X, Y, Z) 3D coordinate point given an initial guess of volume coordinates.  Also calculate the distance between the
+    3D point and the found volume point.
+
+    \code{.cpp}
+    // Add Pod Geom
+    string geom_id = AddGeom( "POD", "" );
+
+    int surf_indx = 0;
+
+    double r = 0.12;
+    double s = 0.34;
+    double t = 0.56;
+
+    vec3d pnt = CompPntRST( geom_id, surf_indx, r, s, t );
+
+    double rout, sout, tout;
+
+    double r0 = 0.1;
+    double s0 = 0.3;
+    double t0 = 0.5;
+
+    double d = FindRSTGuess( geom_id, surf_indx, pnt, r0, s0, t0, rout, sout, tout );
+
+    Print( "Dist " + d + " r " + rout + " s " + sout + " t " + tout );
+    \endcode
+    \sa FindRST
+    \param [in] geom_id Parent Geom ID
+    \param [in] surf_indx Main surface index from the parent Geom
+    \param [in] pt Input 3D coordinate point
+    \param [in] r0 Input R (0 - 1.0) volume coordinate guess
+    \param [in] s0 Input S (0 - 0.5) volume coordinate guess
+    \param [in] t0 Input T (0 - 1.0) volume coordinate guess
+    \param [out] r Output closest R (0 - 1.0) volume coordinate
+    \param [out] s Output closest S (0 - 0.5) volume coordinate
+    \param [out] t Output closest T (0 - 1.0) volume coordinate
+    \return Distance between the 3D point and the closest point of the volume
+*/)";
+    r = se->RegisterGlobalFunction( "double FindRSTGuess( const string & in geom_id, const int & in surf_indx, const vec3d & in pt, const double & in r0, const double & in s0, const double & in t0, double & out r, double & out s, double & out t )", asFUNCTION(vsp::FindRSTGuess), asCALL_CDECL, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
+    Calculate the (X, Y, Z) coordinate for the input volume (R, S, T) coordinate point
+    \code{.cpp}
+    // Add Pod Geom
+    string geom_id = AddGeom( "POD", "" );
+
+    int surf_indx = 0;
+
+    double r = 0.12;
+    double s = 0.34;
+    double t = 0.56;
+
+    vec3d pnt = CompPntRST( geom_id, surf_indx, r, s, t );
+
+    Print( "Point: ( " + pnt.x() + ', ' + pnt.y() + ', ' + pnt.z() + ' )' );
+    \endcode
+    \param [in] geom_id Parent Geom ID
+    \param [in] surf_indx Main surface index from the parent Geom
+    \param [in] r R (0 - 1) volume coordinate
+    \param [in] s S (0 - 0.5) volume coordinate
+    \param [in] t T (0 - 1) volume coordinate
+    \return vec3d coordinate point
+*/)";
+    r = se->RegisterGlobalFunction( "vec3d CompPntRST( const string & in geom_id, const int & in surf_indx, const double & in r, const double & in s, const double & in t )", asFUNCTION(vsp::CompPntRST), asCALL_CDECL, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
+    Determine 3D coordinate for each volume coordinate point in the input arrays
+    \code{.cpp}
+    // Add Pod Geom
+    string geom_id = AddGeom( "POD", "" );
+
+    int n = 5;
+
+    array<double> rvec, svec, tvec;
+
+    rvec.resize( n );
+    svec.resize( n );
+    tvec.resize( n );
+
+    for( int i = 0 ; i < n ; i++ )
+    {
+        rvec[i] = (i+1)*1.0/(n+1);
+
+        svec[i] = (n-i)*0.5/(n+1);
+
+        tvec[i] = (i+1)*1.0/(n+1);
+    }
+
+    array< vec3d > ptvec = CompVecPntRST( geom_id, 0, rvec, svec, tvec );
+    \endcode
+    \param [in] geom_id Parent Geom ID
+    \param [in] surf_indx Main surface index from the parent Geom
+    \param [in] rs Input array of R (0 - 1.0) volume coordinates
+    \param [in] ss Input array of S (0 - 0.5) volume coordinates
+    \param [in] ts Input array of T (0 - 1.0) volume coordinates
+    \return Array of 3D coordinate points
+*/)";
+    r = se->RegisterGlobalFunction( "array<vec3d>@ CompVecPntRST(const string & in geom_id, const int & in surf_indx, array<double>@ rs, array<double>@ ss, array<double>@ ts )", asMETHOD( ScriptMgrSingleton, CompVecPntRST ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
+    Convert RST volumetric coordinates to LMN coordinates.
+    \code{.cpp}
+    // Add Pod Geom
+    string geom_id = AddGeom( "POD", "" );
+
+    int surf_indx = 0;
+
+    double r = 0.12;
+    double s = 0.34;
+    double t = 0.56;
+    double l, m, n;
+
+    ConvertRSTtoLMN( geom_id, surf_indx, r, s, t, l, m, n );
+
+    \endcode
+    \param [in] geom_id Parent Geom ID
+    \param [in] surf_indx Main surface index from the parent Geom
+    \param [in] r R (0 - 1) volume coordinate
+    \param [in] s S (0 - 0.5) volume coordinate
+    \param [in] t T (0 - 1) volume coordinate
+    \param [out] l L (0 - 1) linear volume coordinate
+    \param [out] m M (0 - 1) linear volume coordinate
+    \param [out] n N (0 - 1) linear volume coordinate
+    \return void
+*/)";
+    r = se->RegisterGlobalFunction( "vec3d ConvertRSTtoLMN( const string & in geom_id, const int & in surf_indx, const double & in r, const double & in s, const double & in t, double & out l, double & out m, double & out n )", asFUNCTION(vsp::ConvertRSTtoLMN), asCALL_CDECL, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
+    Convert LMN volumetric coordinates to RST coordinates.
+    \code{.cpp}
+    // Add Pod Geom
+    string geom_id = AddGeom( "POD", "" );
+
+    int surf_indx = 0;
+
+    double l = 0.12;
+    double m = 0.34;
+    double n = 0.56;
+    double r, s, t;
+
+    ConvertLMNtoRST( geom_id, surf_indx, l, m, n, r, s, t );
+
+    \endcode
+    \param [in] geom_id Parent Geom ID
+    \param [in] surf_indx Main surface index from the parent Geom
+    \param [in] l L (0 - 1) linear volume coordinate
+    \param [in] m M (0 - 1) linear volume coordinate
+    \param [in] n N (0 - 1) linear volume coordinate
+    \param [out] r R (0 - 1) volume coordinate
+    \param [out] s S (0 - 0.5) volume coordinate
+    \param [out] t T (0 - 1) volume coordinate
+    \return void
+*/)";
+    r = se->RegisterGlobalFunction( "vec3d ConvertLMNtoRST( const string & in geom_id, const int & in surf_indx, const double & in l, const double & in m, const double & in n, double & out r, double & out s, double & out t )", asFUNCTION(vsp::ConvertLMNtoRST), asCALL_CDECL, doc_struct );
+    assert( r >= 0 );
+
+
+    doc_struct.comment = R"(
+/*!
+    Convert vector of RST volumetric coordinates to LMN coordinates.
+
+    \code{.cpp}
+    // Add Pod Geom
+    string geom_id = AddGeom( "POD", "" );
+
+    int n = 5;
+
+    array<double> rvec, svec, tvec;
+
+    rvec.resize( n );
+    svec.resize( n );
+    tvec.resize( n );
+
+    for( int i = 0 ; i < n ; i++ )
+    {
+        rvec[i] = (i+1)*1.0/(n+1);
+        svec[i] = 0.5 * (n-i)*1.0/(n+1);
+        tvec[i] = (i+1)*1.0/(n+1);
+    }
+
+    array<double> lvec, mvec, nvec;
+
+    ConvertRSTtoLMNVec( geom_id, 0, rvec, svec, tvec, lvec, mvec, nvec );
+
+    \endcode
+    \sa ConvertLMNtoRSTVec, ConvertRSTtoLMN, ConvertLMNtoRST
+    \param [in] geom_id Parent Geom ID
+    \param [in] surf_indx Main surface index from the parent Geom
+    \param [in] rs Input array of R (0 - 1) volumetric coordinate
+    \param [in] ss Input array of S (0 - 0.5) volumetric coordinate
+    \param [in] ts Input array of T (0 - 1) volumetric coordinate
+    \param [out] ls Output array of L (0 - 1) linear volumetric coordinate
+    \param [out] ms Output array of M (0 - 1) linear volumetric coordinate
+    \param [out] ns Output array of N (0 - 1) linear volumetric coordinate
+*/)";
+    r = se->RegisterGlobalFunction( "void ConvertRSTtoLMNVec(const string & in geom_id, const int & in surf_indx, array<double>@ rs, array<double>@ ss, array<double>@ ts, array<double>@ ls, array<double>@ ms, array<double>@ ns )", asMETHOD( ScriptMgrSingleton, ConvertRSTtoLMNVec ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
+    Convert vector of LMN volumetric coordinates to RST coordinates.
+
+    \code{.cpp}
+    // Add Pod Geom
+    string geom_id = AddGeom( "POD", "" );
+
+    int n = 5;
+
+    array<double> lvec, mvec, nvec;
+
+    lvec.resize( n );
+    mvec.resize( n );
+    nvec.resize( n );
+
+    for( int i = 0 ; i < n ; i++ )
+    {
+        lvec[i] = (i+1)*1.0/(n+1);
+        mvec[i] = (n-i)*1.0/(n+1);
+        nvec[i] = (i+1)*1.0/(n+1);
+    }
+
+    array<double> rvec, svec, tvec;
+
+    ConvertLMNtoRSTVec( geom_id, 0, lvec, mvec, nvec, rvec, svec, tvec );
+
+    \endcode
+    \sa ConvertRSTtoLMNVec, ConvertRSTtoLMN, ConvertLMNtoRST
+    \param [in] geom_id Parent Geom ID
+    \param [in] surf_indx Main surface index from the parent Geom
+    \param [in] rs Input array of R (0 - 1) volumetric coordinate
+    \param [in] ss Input array of S (0 - 0.5) volumetric coordinate
+    \param [in] ts Input array of T (0 - 1) volumetric coordinate
+    \param [out] ls Output array of L (0 - 1) linear volumetric coordinate
+    \param [out] ms Output array of M (0 - 1) linear volumetric coordinate
+    \param [out] ns Output array of N (0 - 1) linear volumetric coordinate
+*/)";
+    r = se->RegisterGlobalFunction( "void ConvertLMNtoRSTVec(const string & in geom_id, const int & in surf_indx, array<double>@ ls, array<double>@ ms, array<double>@ ns, array<double>@ rs, array<double>@ ss, array<double>@ ts )", asMETHOD( ScriptMgrSingleton, ConvertLMNtoRSTVec ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
     Get the surface coordinate point of each intersection of the tessellated wireframe for a particular surface
     \code{.cpp}
     // Add Pod Geom
@@ -10960,6 +11507,143 @@ void ScriptMgrSingleton::RegisterAPI( asIScriptEngine* se )
     \param [out] ds Output array of axis distances for each 3D point and the projected point of the surface
 */)";
     r = se->RegisterGlobalFunction( "void AxisProjVecPnt01Guess(const string & in geom_id, int & in surf_indx, const int & in iaxis, array<vec3d>@ pts, array<double>@ u0s, array<double>@ w0s, array<double>@ us, array<double>@ ws, array<vec3d>@ ps_out, array<double>@ ds )", asMETHOD( ScriptMgrSingleton, AxisProjVecPnt01Guess ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
+    Test whether a vector of points are inside a specified surface.
+
+    \code{.cpp}
+    // Add Pod Geom
+    string geom_id = AddGeom( "POD", "" );
+
+    int surf_indx = 0;
+
+    int n = 5;
+
+    array<double> rvec, svec, tvec;
+
+    rvec.resize( n );
+    svec.resize( n );
+    tvec.resize( n );
+
+    for( int i = 0 ; i < n ; i++ )
+    {
+        rvec[i] = (i+1)*1.0/(n+1);
+
+        svec[i] = (n-i)*0.5/(n+1);
+
+        tvec[i] = (i+1)*1.0/(n+1);
+    }
+
+    array< vec3d > ptvec = CompVecPntRST( geom_id, 0, rvec, svec, tvec );
+
+    array<bool> res;
+    res = VecInsideSurf( geom_id, surf_indx, ptvec );
+
+    \endcode
+    \sa VecInsideSurf
+    \param [in] geom_id Parent Geom ID
+    \param [in] surf_indx Main surface index from the parent Geom
+    \param [in] pts Input array of 3D coordinate points
+    \return Boolean vector for each point.  True if it is inside the surface, false otherwise.
+*/)";
+    r = se->RegisterGlobalFunction( "array<bool>@  VecInsideSurf( const string & in geom_id, const int & in surf_indx, array<vec3d>@ pts )", asFUNCTION(vsp::VecInsideSurf), asCALL_CDECL, doc_struct );
+    assert( r >= 0 );
+
+   doc_struct.comment = R"(
+/*!
+    Determine the nearest volume coordinates for an input array of 3D coordinate points and calculate the distance between each
+    3D point and the found point in the volume.
+    \code{.cpp}
+    // Add Pod Geom
+    string geom_id = AddGeom( "POD", "" );
+
+    int n = 5;
+
+    array<double> rvec, svec, tvec;
+
+    rvec.resize( n );
+    svec.resize( n );
+    tvec.resize( n );
+
+    for( int i = 0 ; i < n ; i++ )
+    {
+        rvec[i] = (i+1)*1.0/(n+1);
+
+        svec[i] = (n-i)*0.5/(n+1);
+
+        tvec[i] = (i+1)*1.0/(n+1);
+    }
+
+    array< vec3d > ptvec = CompVecPntRST( geom_id, 0, rvec, svec, tvec );
+
+    array<double> routv, soutv, toutv, doutv;
+
+    FindRSTVec( geom_id, 0, ptvec, routv, soutv, toutv, doutv );
+    \endcode
+    \sa FindRSTVecGuess
+    \param [in] geom_id Parent Geom ID
+    \param [in] surf_indx Main surface index from the parent Geom
+    \param [in] pts Input array of 3D coordinate points
+    \param [out] rs Output array of the closest R (0 - 1.0) volume coordinate for each 3D input point
+    \param [out] ss Output array of the closest S (0 - 0.5) volume coordinate for each 3D input point
+    \param [out] ts Output array of the closest T (0 - 1.0) volume coordinate for each 3D input point
+    \param [out] ds Output array of distances for each 3D point and the closest point of the volume
+*/)";
+    r = se->RegisterGlobalFunction( "void FindRSTVec(const string & in geom_id, const int & in surf_indx, array<vec3d>@ pts, array<double>@ rs, array<double>@ ss, array<double>@ ts, array<double>@ ds )", asMETHOD( ScriptMgrSingleton, FindRSTVec ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct );
+    assert( r >= 0 );
+
+    doc_struct.comment = R"(
+/*!
+    Determine the nearest volume coordinates for an input array of 3D coordinate points and calculate the distance between each
+    3D point and the closest point of the volume. This function takes an input array of volume coordinate guesses for each 3D
+    coordinate, offering a potential decrease in computation time compared to FindRSTVec.
+    \code{.cpp}
+    // Add Pod Geom
+    string geom_id = AddGeom( "POD", "" );
+
+    int n = 5;
+
+    array<double> rvec, svec, tvec;
+
+    rvec.resize( n );
+    svec.resize( n );
+    tvec.resize( n );
+
+    for( int i = 0 ; i < n ; i++ )
+    {
+        rvec[i] = (i+1)*1.0/(n+1);
+
+        svec[i] = (n-i)*0.5/(n+1);
+
+        tvec[i] = (i+1)*1.0/(n+1);
+    }
+
+    array< vec3d > ptvec = CompVecPntRST( geom_id, 0, rvec, svec, tvec );
+
+    array<double> routv, soutv, toutv, doutv;
+
+    for( int i = 0 ; i < n ; i++ )
+    {
+        ptvec[i] = ptvec[i] * 0.9;
+    }
+
+    FindRSTVecGuess( geom_id, 0, ptvec, rvec, svec, tvec, routv, soutv, toutv, doutv );
+    \endcode
+    \sa FindRSTVec,
+    \param [in] geom_id Parent Geom ID
+    \param [in] surf_indx Main surface index from the parent Geom
+    \param [in] pts Input array of 3D coordinate points
+    \param [in] r0s Input array of U (0 - 1.0) volume coordinate guesses
+    \param [in] s0s Input array of S (0 - 0.5) volume coordinate guesses
+    \param [in] t0s Input array of T (0 - 1.0) volume coordinate guesses
+    \param [out] rs Output array of the closest R (0 - 1.0) volume coordinate for each 3D input point
+    \param [out] ss Output array of the closest S (0 - 0.5) volume coordinate for each 3D input point
+    \param [out] ts Output array of the closest T (0 - 1.0) volume coordinate for each 3D input point
+    \param [out] ds Output array of distances for each 3D point and the closest point of the volume
+*/)";
+    r = se->RegisterGlobalFunction( "void FindRSTVecGuess(const string & in geom_id, const int & in surf_indx, array<vec3d>@ pts, array<double>@ r0s, array<double>@ s0s, array<double>@ t0s, array<double>@ rs, array<double>@ ss, array<double>@ ts, array<double>@ ds )", asMETHOD( ScriptMgrSingleton, FindRSTVecGuess ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct );
     assert( r >= 0 );
 
     //=== Register Measure Functions ===//
@@ -12081,7 +12765,7 @@ void ScriptMgrSingleton::RegisterUtility( asIScriptEngine* se )
     \endcode
     \return OpenVSP version string (i.e. "OpenVSP 3.17.1")
 */)";
-    r = se->RegisterGlobalFunction( "string GetVSPVersion( )", asMETHOD( ScriptMgrSingleton, GetVSPVersion ), asCALL_THISCALL_ASGLOBAL, &ScriptMgr, doc_struct);
+    r = se->RegisterGlobalFunction( "string GetVSPVersion( )", asFUNCTION( vsp::GetVSPVersion ), asCALL_CDECL, doc_struct);
     assert( r >= 0 );
 
     doc_struct.comment = R"(
@@ -12275,7 +12959,8 @@ CScriptArray* ScriptMgrSingleton::GetProxyDoubleMatArray()
     return sarr;
 }
 
-void ScriptMgrSingleton::FillDoubleArray( vector < double > & in, CScriptArray* out )
+template < class T >
+void ScriptMgrSingleton::FillArray( vector < T > & in, CScriptArray* out )
 {
     out->Resize( in.size() );
     for ( int i = 0 ; i < ( int )in.size() ; i++ )
@@ -12284,12 +12969,13 @@ void ScriptMgrSingleton::FillDoubleArray( vector < double > & in, CScriptArray* 
     }
 }
 
-void ScriptMgrSingleton::FillVec3dArray( vector < vec3d > & in, CScriptArray* out )
+template < class T >
+void ScriptMgrSingleton::FillArray( CScriptArray* in, vector < T > & out )
 {
-    out->Resize( in.size() );
-    for ( int i = 0 ; i < ( int )in.size() ; i++ )
+    out.resize( in->GetSize() );
+    for ( int i = 0 ; i < ( int )in->GetSize() ; i++ )
     {
-        out->SetValue( i, &in[i] );
+        out[i] = * ( T* ) ( in->At( i ) );
     }
 }
 
@@ -12375,12 +13061,7 @@ CScriptArray* ScriptMgrSingleton::GetAvailableCSNameVec( int CSGroupIndex )
 void ScriptMgrSingleton::AddSelectedToCSGroup( CScriptArray* selected, int CSGroupIndex )
 {
     vector < int > int_vec;
-
-    int_vec.resize( selected->GetSize() );
-    for ( int i = 0; i < (int)selected->GetSize(); i++ )
-    {
-        int_vec[i] = *(int*)( selected->At( i ) );
-    }
+    FillArray( selected, int_vec );
 
     vsp::AddSelectedToCSGroup( int_vec, CSGroupIndex );
 }
@@ -12388,12 +13069,7 @@ void ScriptMgrSingleton::AddSelectedToCSGroup( CScriptArray* selected, int CSGro
 void ScriptMgrSingleton::RemoveSelectedFromCSGroup( CScriptArray* selected, int CSGroupIndex )
 {
     vector < int > int_vec;
-
-    int_vec.resize( selected->GetSize() );
-    for ( int i = 0; i < (int)selected->GetSize(); i++ )
-    {
-        int_vec[i] = *(int*)( selected->At( i ) );
-    }
+    FillArray( selected, int_vec );
 
     vsp::RemoveSelectedFromCSGroup( int_vec, CSGroupIndex );
 }
@@ -12593,12 +13269,7 @@ CScriptArray* ScriptMgrSingleton::GetBORLowerCSTCoefs( const string & bor_id )
 void ScriptMgrSingleton::DeleteGeomVec( CScriptArray* del_arr )
 {
     vector < string > del_vec;
-
-    del_vec.resize( del_arr->GetSize() );
-    for ( int i = 0 ; i < ( int )del_arr->GetSize() ; i++ )
-    {
-        del_vec[i] = * ( string* )( del_arr->At( i ) );
-    }
+    FillArray( del_arr, del_vec );
 
     vsp::DeleteGeomVec( del_vec );
 }
@@ -12606,15 +13277,12 @@ void ScriptMgrSingleton::DeleteGeomVec( CScriptArray* del_arr )
 void ScriptMgrSingleton::SetXSecPnts( const string& xsec_id, CScriptArray* pnt_arr )
 {
     vector< vec3d > pnt_vec;
-    pnt_vec.resize( pnt_arr->GetSize() );
-    for ( int i = 0 ; i < ( int )pnt_arr->GetSize() ; i++ )
-    {
-        pnt_vec[i] = * ( vec3d* )( pnt_arr->At( i ) );
-    }
+    FillArray( pnt_arr, pnt_vec );
+
     vsp::SetXSecPnts( xsec_id, pnt_vec );
 }
 
-void ScriptMgrSingleton::SetAirfoilPnts( const string& xsec_id, CScriptArray* up_pnt_arr, CScriptArray* low_pnt_arr )
+void ScriptMgrSingleton::SetAirfoilUpperPnts( const string& xsec_id, CScriptArray* up_pnt_arr )
 {
     vector< vec3d > up_pnt_vec;
     up_pnt_vec.resize( up_pnt_arr->GetSize() );
@@ -12623,12 +13291,28 @@ void ScriptMgrSingleton::SetAirfoilPnts( const string& xsec_id, CScriptArray* up
         up_pnt_vec[i] = * ( vec3d* )( up_pnt_arr->At( i ) );
     }
 
+    vsp::SetAirfoilUpperPnts( xsec_id, up_pnt_vec );
+}
+
+void ScriptMgrSingleton::SetAirfoilLowerPnts( const string& xsec_id, CScriptArray* low_pnt_arr )
+{
     vector< vec3d > low_pnt_vec;
     low_pnt_vec.resize( low_pnt_arr->GetSize() );
     for ( int i = 0 ; i < ( int )low_pnt_arr->GetSize() ; i++ )
     {
         low_pnt_vec[i] = * ( vec3d* )( low_pnt_arr->At( i ) );
     }
+
+    vsp::SetAirfoilLowerPnts( xsec_id, low_pnt_vec );
+}
+
+void ScriptMgrSingleton::SetAirfoilPnts( const string& xsec_id, CScriptArray* up_pnt_arr, CScriptArray* low_pnt_arr )
+{
+    vector< vec3d > up_pnt_vec;
+    FillArray( up_pnt_arr, up_pnt_vec );
+
+    vector< vec3d > low_pnt_vec;
+    FillArray( low_pnt_arr, low_pnt_vec );
 
     vsp::SetAirfoilPnts( xsec_id, up_pnt_vec, low_pnt_vec );
 }
@@ -12636,15 +13320,12 @@ void ScriptMgrSingleton::SetAirfoilPnts( const string& xsec_id, CScriptArray* up
 void ScriptMgrSingleton::SetBORXSecPnts( const string& bor_id, CScriptArray* pnt_arr )
 {
     vector< vec3d > pnt_vec;
-    pnt_vec.resize( pnt_arr->GetSize() );
-    for ( int i = 0 ; i < ( int )pnt_arr->GetSize() ; i++ )
-    {
-        pnt_vec[i] = * ( vec3d* )( pnt_arr->At( i ) );
-    }
+    FillArray( pnt_arr, pnt_vec );
+
     vsp::SetBORXSecPnts( bor_id, pnt_vec );
 }
 
-void ScriptMgrSingleton::SetBORAirfoilPnts( const string& bor_id, CScriptArray* up_pnt_arr, CScriptArray* low_pnt_arr )
+void ScriptMgrSingleton::SetBORAirfoilUpperPnts( const string& bor_id, CScriptArray* up_pnt_arr )
 {
     vector< vec3d > up_pnt_vec;
     up_pnt_vec.resize( up_pnt_arr->GetSize() );
@@ -12653,12 +13334,28 @@ void ScriptMgrSingleton::SetBORAirfoilPnts( const string& bor_id, CScriptArray* 
         up_pnt_vec[i] = * ( vec3d* )( up_pnt_arr->At( i ) );
     }
 
+    vsp::SetBORAirfoilUpperPnts( bor_id, up_pnt_vec );
+}
+
+void ScriptMgrSingleton::SetBORAirfoilLowerPnts( const string& bor_id, CScriptArray* low_pnt_arr )
+{
     vector< vec3d > low_pnt_vec;
     low_pnt_vec.resize( low_pnt_arr->GetSize() );
     for ( int i = 0 ; i < ( int )low_pnt_arr->GetSize() ; i++ )
     {
         low_pnt_vec[i] = * ( vec3d* )( low_pnt_arr->At( i ) );
     }
+
+    vsp::SetBORAirfoilLowerPnts( bor_id, low_pnt_vec );
+}
+
+void ScriptMgrSingleton::SetBORAirfoilPnts( const string& bor_id, CScriptArray* up_pnt_arr, CScriptArray* low_pnt_arr )
+{
+    vector< vec3d > up_pnt_vec;
+    FillArray( up_pnt_arr, up_pnt_vec );
+
+    vector< vec3d > low_pnt_vec;
+    FillArray( low_pnt_arr, low_pnt_vec );
 
     vsp::SetBORAirfoilPnts( bor_id, up_pnt_vec, low_pnt_vec );
 }
@@ -12694,11 +13391,7 @@ CScriptArray* ScriptMgrSingleton::GetVKTAirfoilPnts( const int &npts, const doub
 CScriptArray* ScriptMgrSingleton::GetVKTAirfoilCpDist( const double &alpha, const double &epsilon, const double &kappa, const double &tau, CScriptArray* xyzdata )
 {
     vector< vec3d > xyz_vec;
-    xyz_vec.resize( xyzdata->GetSize() );
-    for ( int i = 0; i < (int)xyzdata->GetSize(); i++ )
-    {
-        xyz_vec[i] = *(vec3d*)( xyzdata->At( i ) );
-    }
+    FillArray( xyzdata, xyz_vec );
 
     m_ProxyDoubleArray = vsp::GetVKTAirfoilCpDist( alpha, epsilon, kappa, tau, xyz_vec );
 
@@ -12722,11 +13415,7 @@ CScriptArray* ScriptMgrSingleton::GetFeatureLinePnts( const string & geom_id )
 CScriptArray* ScriptMgrSingleton::GetEllipsoidCpDist( CScriptArray* surf_pnt_arr, const vec3d& abc_rad, const vec3d& V_inf )
 {
     vector< vec3d > surf_pnt_vec;
-    surf_pnt_vec.resize( surf_pnt_arr->GetSize() );
-    for ( int i = 0; i < (int)surf_pnt_arr->GetSize(); i++ )
-    {
-        surf_pnt_vec[i] = *(vec3d*)( surf_pnt_arr->At( i ) );
-    }
+    FillArray( surf_pnt_arr, surf_pnt_vec );
 
     m_ProxyDoubleArray = vsp::GetEllipsoidCpDist( surf_pnt_vec, abc_rad, V_inf );
 
@@ -12736,12 +13425,7 @@ CScriptArray* ScriptMgrSingleton::GetEllipsoidCpDist( CScriptArray* surf_pnt_arr
 void ScriptMgrSingleton::SetUpperCST( const string& xsec_id, int deg, CScriptArray* coefs_arr )
 {
     vector < double > coefs_vec;
-
-    coefs_vec.resize( coefs_arr->GetSize() );
-    for ( int i = 0 ; i < ( int )coefs_arr->GetSize() ; i++ )
-    {
-        coefs_vec[i] = * ( double* )( coefs_arr->At( i ) );
-    }
+    FillArray( coefs_arr, coefs_vec );
 
     vsp::SetUpperCST( xsec_id, deg, coefs_vec );
 }
@@ -12749,12 +13433,7 @@ void ScriptMgrSingleton::SetUpperCST( const string& xsec_id, int deg, CScriptArr
 void ScriptMgrSingleton::SetLowerCST( const string& xsec_id, int deg, CScriptArray* coefs_arr )
 {
     vector < double > coefs_vec;
-
-    coefs_vec.resize( coefs_arr->GetSize() );
-    for ( int i = 0 ; i < ( int )coefs_arr->GetSize() ; i++ )
-    {
-        coefs_vec[i] = * ( double* )( coefs_arr->At( i ) );
-    }
+    FillArray( coefs_arr, coefs_vec );
 
     vsp::SetLowerCST( xsec_id, deg, coefs_vec );
 }
@@ -12762,12 +13441,7 @@ void ScriptMgrSingleton::SetLowerCST( const string& xsec_id, int deg, CScriptArr
 void ScriptMgrSingleton::SetBORUpperCST( const string& bor_id, int deg, CScriptArray* coefs_arr )
 {
     vector < double > coefs_vec;
-
-    coefs_vec.resize( coefs_arr->GetSize() );
-    for ( int i = 0 ; i < ( int )coefs_arr->GetSize() ; i++ )
-    {
-        coefs_vec[i] = * ( double* )( coefs_arr->At( i ) );
-    }
+    FillArray( coefs_arr, coefs_vec );
 
     vsp::SetBORUpperCST( bor_id, deg, coefs_vec );
 }
@@ -12775,12 +13449,7 @@ void ScriptMgrSingleton::SetBORUpperCST( const string& bor_id, int deg, CScriptA
 void ScriptMgrSingleton::SetBORLowerCST( const string& bor_id, int deg, CScriptArray* coefs_arr )
 {
     vector < double > coefs_vec;
-
-    coefs_vec.resize( coefs_arr->GetSize() );
-    for ( int i = 0 ; i < ( int )coefs_arr->GetSize() ; i++ )
-    {
-        coefs_vec[i] = * ( double* )( coefs_arr->At( i ) );
-    }
+    FillArray( coefs_arr, coefs_vec );
 
     vsp::SetBORLowerCST( bor_id, deg, coefs_vec );
 }
@@ -12800,23 +13469,18 @@ CScriptArray* ScriptMgrSingleton::GetEditXSecCtrlVec( const std::string & xsec_i
     return GetProxyVec3dArray();
 }
 
-void ScriptMgrSingleton::SetEditXSecPnts( const string & xsec_id, CScriptArray* u_vec, CScriptArray* control_pts )
+void ScriptMgrSingleton::SetEditXSecPnts( const string & xsec_id, CScriptArray* u_vec, CScriptArray* control_pts, CScriptArray* r_vec )
 {
-    vector < vec3d > control_pnt_vec( control_pts->GetSize() );
+    vector < vec3d > control_pnt_vec;
+    FillArray( control_pts, control_pnt_vec );
 
-    for ( int i = 0; i < (int)control_pts->GetSize(); i++ )
-    {
-        control_pnt_vec[i] = *(vec3d*)( control_pts->At( i ) );
-    }
+    vector < double > new_u_vec;
+    FillArray( u_vec, new_u_vec );
 
-    vector < double > new_u_vec( u_vec->GetSize() );
+    vector < double > new_r_vec;
+    FillArray( r_vec, new_r_vec );
 
-    for ( int i = 0; i < (int)u_vec->GetSize(); i++ )
-    {
-        new_u_vec[i] = *(double*)( u_vec->At( i ) );
-    }
-
-    vsp::SetEditXSecPnts( xsec_id, new_u_vec, control_pnt_vec );
+    vsp::SetEditXSecPnts( xsec_id, new_u_vec, control_pnt_vec, new_r_vec );
 }
 
 CScriptArray* ScriptMgrSingleton::GetEditXSecFixedUVec( const std::string& xsec_id )
@@ -12836,12 +13500,8 @@ CScriptArray* ScriptMgrSingleton::GetEditXSecFixedUVec( const std::string& xsec_
 
 void ScriptMgrSingleton::SetEditXSecFixedUVec( const string & xsec_id, CScriptArray* fixed_u_vec )
 {
-    vector < bool > new_fixed_u_vec( fixed_u_vec->GetSize() );
-
-    for ( int i = 0; i < (int)fixed_u_vec->GetSize(); i++ )
-    {
-        new_fixed_u_vec[i] = *(bool*)( fixed_u_vec->At( i ) );
-    }
+    vector < bool > new_fixed_u_vec;
+    FillArray( fixed_u_vec, new_fixed_u_vec );
 
     vsp::SetEditXSecFixedUVec( xsec_id, new_fixed_u_vec );
 }
@@ -12943,20 +13603,10 @@ void ScriptMgrSingleton::DeleteVarPresetSet( string group_name, string setting_n
 void ScriptMgrSingleton::SetPCurve( const string& geom_id, const int & pcurveid, CScriptArray* t_arr, CScriptArray* val_arr, const int & newtype )
 {
     vector < double > t_vec;
-
-    t_vec.resize( t_arr->GetSize() );
-    for ( int i = 0 ; i < ( int )t_arr->GetSize() ; i++ )
-    {
-        t_vec[i] = * ( double* )( t_arr->At( i ) );
-    }
+    FillArray( t_arr, t_vec );
 
     vector < double > val_vec;
-
-    val_vec.resize( t_arr->GetSize() );
-    for ( int i = 0 ; i < ( int )val_arr->GetSize() ; i++ )
-    {
-        val_vec[i] = * ( double* )( val_arr->At( i ) );
-    }
+    FillArray( val_arr, val_vec );
 
     vsp::SetPCurve( geom_id, pcurveid, t_vec, val_vec, newtype );
 }
@@ -13006,12 +13656,7 @@ CScriptArray* ScriptMgrSingleton::GetFeaPartIDVec( const string & fea_struct_id 
 void ScriptMgrSingleton::SetIntAnalysisInput( const string& analysis, const string & name, CScriptArray* indata, int index )
 {
     vector < int > indata_vec;
-
-    indata_vec.resize( indata->GetSize() );
-    for ( int i = 0 ; i < ( int )indata->GetSize() ; i++ )
-    {
-        indata_vec[i] = * ( int* )( indata->At( i ) );
-    }
+    FillArray( indata, indata_vec );
 
     vsp::SetIntAnalysisInput( analysis, name, indata_vec, index );
 }
@@ -13019,12 +13664,7 @@ void ScriptMgrSingleton::SetIntAnalysisInput( const string& analysis, const stri
 void ScriptMgrSingleton::SetDoubleAnalysisInput( const string& analysis, const string & name, CScriptArray* indata, int index )
 {
     vector < double > indata_vec;
-
-    indata_vec.resize( indata->GetSize() );
-    for ( int i = 0 ; i < ( int )indata->GetSize() ; i++ )
-    {
-        indata_vec[i] = * ( double* )( indata->At( i ) );
-    }
+    FillArray( indata, indata_vec );
 
     vsp::SetDoubleAnalysisInput( analysis, name, indata_vec, index );
 }
@@ -13032,12 +13672,7 @@ void ScriptMgrSingleton::SetDoubleAnalysisInput( const string& analysis, const s
 void ScriptMgrSingleton::SetStringAnalysisInput( const string& analysis, const string & name, CScriptArray* indata, int index )
 {
     vector < string > indata_vec;
-
-    indata_vec.resize( indata->GetSize() );
-    for ( int i = 0 ; i < ( int )indata->GetSize() ; i++ )
-    {
-        indata_vec[i] = * ( string* )( indata->At( i ) );
-    }
+    FillArray( indata, indata_vec );
 
     vsp::SetStringAnalysisInput( analysis, name, indata_vec, index );
 }
@@ -13045,12 +13680,7 @@ void ScriptMgrSingleton::SetStringAnalysisInput( const string& analysis, const s
 void ScriptMgrSingleton::SetVec3dAnalysisInput( const string& analysis, const string & name, CScriptArray* indata, int index )
 {
     vector < vec3d > indata_vec;
-
-    indata_vec.resize( indata->GetSize() );
-    for ( int i = 0 ; i < ( int )indata->GetSize() ; i++ )
-    {
-        indata_vec[i] = * ( vec3d* )( indata->At( i ) );
-    }
+    FillArray( indata, indata_vec );
 
     vsp::SetVec3dAnalysisInput( analysis, name, indata_vec, index );
 }
@@ -13058,38 +13688,37 @@ void ScriptMgrSingleton::SetVec3dAnalysisInput( const string& analysis, const st
 CScriptArray* ScriptMgrSingleton::CompVecPnt01(const string &geom_id, const int &surf_indx, CScriptArray* us, CScriptArray* ws)
 {
     vector < double > in_us;
-    in_us.resize( us->GetSize() );
-    for ( int i = 0 ; i < ( int )us->GetSize() ; i++ )
-    {
-        in_us[i] = * ( double* )( us->At( i ) );
-    }
+    FillArray( us, in_us );
 
     vector < double > in_ws;
-    in_ws.resize( ws->GetSize() );
-    for ( int i = 0 ; i < ( int )ws->GetSize() ; i++ )
-    {
-        in_ws[i] = * ( double* )( ws->At( i ) );
-    }
+    FillArray( ws, in_ws );
 
     m_ProxyVec3dArray = vsp::CompVecPnt01( geom_id, surf_indx, in_us, in_ws );
+    return GetProxyVec3dArray();
+}
+
+CScriptArray* ScriptMgrSingleton::CompVecPntRST(const string &geom_id, const int &surf_indx, CScriptArray* rs, CScriptArray* ss, CScriptArray* ts)
+{
+    vector < double > in_rs;
+    FillArray( rs, in_rs );
+
+    vector < double > in_ss;
+    FillArray( ss, in_ss );
+
+    vector < double > in_ts;
+    FillArray( ts, in_ts );
+
+    m_ProxyVec3dArray = vsp::CompVecPntRST( geom_id, surf_indx, in_rs, in_ss, in_ts );
     return GetProxyVec3dArray();
 }
 
 CScriptArray* ScriptMgrSingleton::CompVecNorm01(const string &geom_id, const int &surf_indx, CScriptArray* us, CScriptArray* ws)
 {
     vector < double > in_us;
-    in_us.resize( us->GetSize() );
-    for ( int i = 0 ; i < ( int )us->GetSize() ; i++ )
-    {
-        in_us[i] = * ( double* )( us->At( i ) );
-    }
+    FillArray( us, in_us );
 
     vector < double > in_ws;
-    in_ws.resize( ws->GetSize() );
-    for ( int i = 0 ; i < ( int )ws->GetSize() ; i++ )
-    {
-        in_ws[i] = * ( double* )( ws->At( i ) );
-    }
+    FillArray( ws, in_ws );
 
     m_ProxyVec3dArray = vsp::CompVecNorm01( geom_id, surf_indx, in_us, in_ws );
     return GetProxyVec3dArray();
@@ -13098,18 +13727,10 @@ CScriptArray* ScriptMgrSingleton::CompVecNorm01(const string &geom_id, const int
 void ScriptMgrSingleton::CompVecCurvature01(const string &geom_id, const int &surf_indx, CScriptArray* us, CScriptArray* ws, CScriptArray* k1s, CScriptArray* k2s, CScriptArray* kas, CScriptArray* kgs)
 {
     vector < double > in_us;
-    in_us.resize( us->GetSize() );
-    for ( int i = 0 ; i < ( int )us->GetSize() ; i++ )
-    {
-        in_us[i] = * ( double* )( us->At( i ) );
-    }
+    FillArray( us, in_us );
 
     vector < double > in_ws;
-    in_ws.resize( ws->GetSize() );
-    for ( int i = 0 ; i < ( int )ws->GetSize() ; i++ )
-    {
-        in_ws[i] = * ( double* )( ws->At( i ) );
-    }
+    FillArray( ws, in_ws );
 
     vector < double > out_k1s;
     vector < double > out_k2s;
@@ -13118,21 +13739,16 @@ void ScriptMgrSingleton::CompVecCurvature01(const string &geom_id, const int &su
 
     vsp::CompVecCurvature01( geom_id, surf_indx, in_us, in_ws, out_k1s, out_k2s, out_kas, out_kgs );
 
-    FillDoubleArray( out_k1s, k1s );
-    FillDoubleArray( out_k2s, k2s );
-    FillDoubleArray( out_kas, kas );
-    FillDoubleArray( out_kgs, kgs );
+    FillArray( out_k1s, k1s );
+    FillArray( out_k2s, k2s );
+    FillArray( out_kas, kas );
+    FillArray( out_kgs, kgs );
 }
 
 void ScriptMgrSingleton::ProjVecPnt01(const string &geom_id, const int &surf_indx, CScriptArray* pts, CScriptArray* us, CScriptArray* ws, CScriptArray* ds )
 {
     vector < vec3d > in_pts;
-
-    in_pts.resize( pts->GetSize() );
-    for ( int i = 0 ; i < ( int )pts->GetSize() ; i++ )
-    {
-        in_pts[i] = * ( vec3d* )( pts->At( i ) );
-    }
+    FillArray( pts, in_pts );
 
     vector < double > out_us;
     vector < double > out_ws;
@@ -13140,34 +13756,21 @@ void ScriptMgrSingleton::ProjVecPnt01(const string &geom_id, const int &surf_ind
 
     vsp::ProjVecPnt01( geom_id, surf_indx, in_pts, out_us, out_ws, out_ds );
 
-    FillDoubleArray( out_us, us );
-    FillDoubleArray( out_ws, ws );
-    FillDoubleArray( out_ds, ds );
+    FillArray( out_us, us );
+    FillArray( out_ws, ws );
+    FillArray( out_ds, ds );
 }
 
 void ScriptMgrSingleton::ProjVecPnt01Guess(const string &geom_id, const int &surf_indx, CScriptArray* pts, CScriptArray* u0s, CScriptArray* w0s, CScriptArray* us, CScriptArray* ws, CScriptArray* ds )
 {
     vector < vec3d > in_pts;
-
-    in_pts.resize( pts->GetSize() );
-    for ( int i = 0 ; i < ( int )pts->GetSize() ; i++ )
-    {
-        in_pts[i] = * ( vec3d* )( pts->At( i ) );
-    }
+    FillArray( pts, in_pts );
 
     vector < double > in_u0s;
-    in_u0s.resize( u0s->GetSize() );
-    for ( int i = 0 ; i < ( int )u0s->GetSize() ; i++ )
-    {
-        in_u0s[i] = * ( double* )( u0s->At( i ) );
-    }
+    FillArray( u0s, in_u0s );
 
     vector < double > in_w0s;
-    in_w0s.resize( w0s->GetSize() );
-    for ( int i = 0 ; i < ( int )w0s->GetSize() ; i++ )
-    {
-        in_w0s[i] = * ( double* )( w0s->At( i ) );
-    }
+    FillArray( w0s, in_w0s );
 
     vector < double > out_us;
     vector < double > out_ws;
@@ -13175,20 +13778,15 @@ void ScriptMgrSingleton::ProjVecPnt01Guess(const string &geom_id, const int &sur
 
     vsp::ProjVecPnt01Guess( geom_id, surf_indx, in_pts, in_u0s, in_w0s, out_us, out_ws, out_ds );
 
-    FillDoubleArray( out_us, us );
-    FillDoubleArray( out_ws, ws );
-    FillDoubleArray( out_ds, ds );
+    FillArray( out_us, us );
+    FillArray( out_ws, ws );
+    FillArray( out_ds, ds );
 }
 
 void ScriptMgrSingleton::AxisProjVecPnt01(const string &geom_id, const int &surf_indx, const int &iaxis, CScriptArray* pts, CScriptArray* us, CScriptArray* ws, CScriptArray* ps_out, CScriptArray* ds )
 {
     vector < vec3d > in_pts;
-
-    in_pts.resize( pts->GetSize() );
-    for ( int i = 0 ; i < ( int )pts->GetSize() ; i++ )
-    {
-        in_pts[i] = * ( vec3d* )( pts->At( i ) );
-    }
+    FillArray( pts, in_pts );
 
     vector < double > out_us;
     vector < double > out_ws;
@@ -13197,35 +13795,22 @@ void ScriptMgrSingleton::AxisProjVecPnt01(const string &geom_id, const int &surf
 
     vsp::AxisProjVecPnt01( geom_id, surf_indx, iaxis, in_pts, out_us, out_ws, out_pts, out_ds );
 
-    FillDoubleArray( out_us, us );
-    FillDoubleArray( out_ws, ws );
-    FillDoubleArray( out_ds, ds );
-    FillVec3dArray( out_pts, ps_out );
+    FillArray( out_us, us );
+    FillArray( out_ws, ws );
+    FillArray( out_ds, ds );
+    FillArray( out_pts, ps_out );
 }
 
 void ScriptMgrSingleton::AxisProjVecPnt01Guess(const string &geom_id, const int &surf_indx, const int &iaxis, CScriptArray* pts, CScriptArray* u0s, CScriptArray* w0s, CScriptArray* us, CScriptArray* ws, CScriptArray* ps_out, CScriptArray* ds )
 {
     vector < vec3d > in_pts;
-
-    in_pts.resize( pts->GetSize() );
-    for ( int i = 0 ; i < ( int )pts->GetSize() ; i++ )
-    {
-        in_pts[i] = * ( vec3d* )( pts->At( i ) );
-    }
+    FillArray( pts, in_pts );
 
     vector < double > in_u0s;
-    in_u0s.resize( u0s->GetSize() );
-    for ( int i = 0 ; i < ( int )u0s->GetSize() ; i++ )
-    {
-        in_u0s[i] = * ( double* )( u0s->At( i ) );
-    }
+    FillArray( u0s, in_u0s );
 
     vector < double > in_w0s;
-    in_w0s.resize( w0s->GetSize() );
-    for ( int i = 0 ; i < ( int )w0s->GetSize() ; i++ )
-    {
-        in_w0s[i] = * ( double* )( w0s->At( i ) );
-    }
+    FillArray( w0s, in_w0s );
 
     vector < double > out_us;
     vector < double > out_ws;
@@ -13234,10 +13819,96 @@ void ScriptMgrSingleton::AxisProjVecPnt01Guess(const string &geom_id, const int 
 
     vsp::AxisProjVecPnt01Guess( geom_id, surf_indx, iaxis, in_pts, in_u0s, in_w0s, out_us, out_ws, out_pts,out_ds );
 
-    FillDoubleArray( out_us, us );
-    FillDoubleArray( out_ws, ws );
-    FillDoubleArray( out_ds, ds );
-    FillVec3dArray( out_pts, ps_out );
+    FillArray( out_us, us );
+    FillArray( out_ws, ws );
+    FillArray( out_ds, ds );
+    FillArray( out_pts, ps_out );
+}
+
+void ScriptMgrSingleton::FindRSTVec(const string &geom_id, const int &surf_indx, CScriptArray* pts, CScriptArray* rs, CScriptArray* ss, CScriptArray* ts, CScriptArray* ds )
+{
+    vector < vec3d > in_pts;
+    FillArray( pts, in_pts );
+
+    vector < double > out_rs;
+    vector < double > out_ss;
+    vector < double > out_ts;
+    vector < double > out_ds;
+
+    vsp::FindRSTVec( geom_id, surf_indx, in_pts, out_rs, out_ss, out_ts, out_ds );
+
+    FillArray( out_rs, rs );
+    FillArray( out_ss, ss );
+    FillArray( out_ts, ts );
+    FillArray( out_ds, ds );
+}
+
+void ScriptMgrSingleton::FindRSTVecGuess(const string &geom_id, const int &surf_indx, CScriptArray* pts, CScriptArray* r0s, CScriptArray* s0s, CScriptArray* t0s, CScriptArray* rs, CScriptArray* ss, CScriptArray* ts, CScriptArray* ds )
+{
+    vector < vec3d > in_pts;
+    FillArray( pts, in_pts );
+
+    vector < double > in_r0s;
+    vector < double > in_s0s;
+    vector < double > in_t0s;
+
+    FillArray( r0s, in_r0s );
+    FillArray( s0s, in_s0s );
+    FillArray( t0s, in_t0s );
+
+    vector < double > out_rs;
+    vector < double > out_ss;
+    vector < double > out_ts;
+    vector < double > out_ds;
+
+    vsp::FindRSTVecGuess(geom_id, surf_indx, in_pts, in_r0s, in_s0s, in_t0s, out_rs, out_ss, out_ts, out_ds );
+
+    FillArray( out_rs, rs );
+    FillArray( out_ss, ss );
+    FillArray( out_ts, ts );
+    FillArray( out_ds, ds );
+}
+
+void ScriptMgrSingleton::ConvertRSTtoLMNVec(const string &geom_id, const int &surf_indx, CScriptArray* rs, CScriptArray* ss, CScriptArray* ts, CScriptArray* ls, CScriptArray* ms, CScriptArray* ns )
+{
+    vector < double > in_rs;
+    vector < double > in_ss;
+    vector < double > in_ts;
+
+    FillArray( rs, in_rs );
+    FillArray( ss, in_ss );
+    FillArray( ts, in_ts );
+
+    vector < double > out_ls;
+    vector < double > out_ms;
+    vector < double > out_ns;
+
+    vsp::ConvertRSTtoLMNVec( geom_id, surf_indx, in_rs, in_ss, in_ts, out_ls, out_ms, out_ns );
+
+    FillArray( out_ls, ls );
+    FillArray( out_ms, ms );
+    FillArray( out_ns, ns );
+}
+
+void ScriptMgrSingleton::ConvertLMNtoRSTVec(const string &geom_id, const int &surf_indx, CScriptArray* ls, CScriptArray* ms, CScriptArray* ns, CScriptArray* rs, CScriptArray* ss, CScriptArray* ts )
+{
+    vector < double > in_ls;
+    vector < double > in_ms;
+    vector < double > in_ns;
+
+    FillArray( ls, in_ls );
+    FillArray( ms, in_ms );
+    FillArray( ns, in_ns );
+
+    vector < double > out_rs;
+    vector < double > out_ss;
+    vector < double > out_ts;
+
+    vsp::ConvertLMNtoRSTVec( geom_id, surf_indx, in_ls, in_ms, in_ns, out_rs, out_ss, out_ts );
+
+    FillArray( out_rs, rs );
+    FillArray( out_ss, ss );
+    FillArray( out_ts, ts );
 }
 
 void ScriptMgrSingleton::GetUWTess01(const string &geom_id, int &surf_indx, CScriptArray* us, CScriptArray* ws )
@@ -13247,8 +13918,8 @@ void ScriptMgrSingleton::GetUWTess01(const string &geom_id, int &surf_indx, CScr
 
     vsp::GetUWTess01( geom_id, surf_indx, out_us, out_ws );
 
-    FillDoubleArray( out_us, us );
-    FillDoubleArray( out_ws, ws );
+    FillArray( out_us, us );
+    FillArray( out_ws, ws );
 }
 
 //=== Register Measure Functions ===//

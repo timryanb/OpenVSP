@@ -134,6 +134,12 @@ vec2d operator*( const vec2d& a, double b )
     return ret;
 }
 
+//******* x = b * a ******//
+vec2d operator*( double b, const vec2d& a )
+{
+    return a * b;
+}
+
 //******* x = a * b ******//
 vec2d operator*( const vec2d& a, const vec2d& b )
 {
@@ -158,6 +164,29 @@ vec2d operator/( const vec2d& a, double b )
     return ret;
 }
 
+vec2d& vec2d::operator+=( const vec2d& b )
+{
+    v[0] += b.v[0];
+    v[1] += b.v[1];
+
+    return *this;
+}
+
+vec2d& vec2d::operator-=( const vec2d& b )
+{
+    v[0] -= b.v[0];
+    v[1] -= b.v[1];
+
+    return *this;
+}
+
+vec2d& vec2d::operator*=( double b )
+{
+    v[0] *= b;
+    v[1] *= b;
+
+    return *this;
+}
 
 //******* cout << a ******//
 //ostream& operator<< (ostream& out, const vec2d& a)
@@ -268,7 +297,7 @@ void encode( double x_min, double y_min, double x_max, double y_max, const vec2d
 //******* Clip Line Segment To Rectangle ******//
 // Adapted From : Hill, "Computer Graphics", Macmillan Pub., New York, 1990. //
 void clip_seg_rect( double x_min, double y_min, double x_max, double y_max,
-                    vec2d& pnt1, vec2d& pnt2, int& visable )
+                    vec2d& pnt1, vec2d& pnt2, int& visible )
 {
     int c1[4];
     int c2[4];
@@ -286,14 +315,14 @@ void clip_seg_rect( double x_min, double y_min, double x_max, double y_max,
         // Segment Lies Entirely Inside Of Rectangle //
         if ( ( !c1[0] && !c1[1] && !c1[2] && !c1[3] ) && ( !c2[0] && !c2[1] && !c2[2] && !c2[3] ) )
         {
-            visable = 1;
+            visible = 1;
             done = 1;
         }
 
         // Segment Lies Entirely Outside Of Rectangle //
         else if ( ( c1[0] && c2[0] ) || ( c1[1] && c2[1] ) || ( c1[2] && c2[2] ) || ( c1[3] && c2[3] ) )
         {
-            visable = 0;
+            visible = 0;
             done = 1;
         }
 
@@ -506,3 +535,54 @@ double det( const vec2d & p0, const vec2d & p1, const vec2d & offset )
     return d;
 }
 
+//==== Find the area of a 2D (XY) polygon ===//
+double poly_area( const std::vector< vec2d > & pnt_vec )
+{
+    if ( pnt_vec.size() < 3 )
+    {
+        return 0.0;
+    }
+
+    double total_area = 0.0;
+    for ( int i = 0 ; i < ( int )( pnt_vec.size() - 1 ) ; i++ )
+    {
+        total_area += pnt_vec[i].x() * pnt_vec[i+1].y() - pnt_vec[i+1].x() * pnt_vec[i].y();
+    }
+
+    if ( dist( pnt_vec[0], pnt_vec.back() ) > 1e-7 )
+    {
+        total_area += pnt_vec.back().x() * pnt_vec[0].y() - pnt_vec[0].x() * pnt_vec.back().y();
+    }
+
+    return std::abs( total_area );
+}
+
+vec2d poly_centroid( const std::vector< vec2d > & pnt_vec )
+{
+    vec2d centroid;
+    if ( pnt_vec.size() < 3 )
+    {
+        return centroid;
+    }
+
+    double total_area = 0.0;
+    for ( int i = 0 ; i < ( int )( pnt_vec.size() - 1 ) ; i++ )
+    {
+        double da = pnt_vec[i].x() * pnt_vec[i+1].y() - pnt_vec[i+1].x() * pnt_vec[i].y();
+        total_area += da;
+        vec2d ceni = da * ( pnt_vec[i] + pnt_vec[i+1] ); // Origin point implied.
+        centroid += ceni;
+    }
+
+    if ( dist( pnt_vec[0], pnt_vec.back() ) > 1e-7 )
+    {
+        double da = pnt_vec.back().x() * pnt_vec[0].y() - pnt_vec[0].x() * pnt_vec.back().y();
+        total_area += da;
+        vec2d ceni = da * ( pnt_vec[0] + pnt_vec.back() ); // Origin point implied
+        centroid += ceni;
+    }
+
+    centroid *= (1.0 / (3.0 * total_area ) ); // Divide by 3.0 is to average points in triangle centroid.
+
+    return centroid;
+}

@@ -80,8 +80,12 @@ public:
     friend vec2d operator+( const vec2d& a, const vec2d& b );
     friend vec2d operator-( const vec2d& a, const vec2d& b );
     friend vec2d operator*( const vec2d& a, double b );
+    friend vec2d operator*( double b, const vec2d& a );
     friend vec2d operator*( const vec2d& a, const vec2d& b );
     friend vec2d operator/( const vec2d& a, double b );
+    vec2d& operator+=( const vec2d& b );
+    vec2d& operator-=( const vec2d& b );
+    vec2d& operator*=( double b );
 
     friend double dist( const vec2d& a, const vec2d& b );
     friend double dist_squared( const vec2d& a, const vec2d& b );
@@ -100,10 +104,12 @@ public:
     friend void encode( double x_min, double y_min, double x_max, double y_max,
                         const vec2d& pnt, int code[4] );
     friend void clip_seg_rect( double x_min, double y_min, double x_max, double y_max,
-                               vec2d& pnt1, vec2d& pnt2, int& visable );
+                               vec2d& pnt1, vec2d& pnt2, int& visible );
 
     friend bool PointInPolygon( const vec2d & R, const std::vector< vec2d > & pnts );
     friend double det( const vec2d & p0, const vec2d & p1, const vec2d & offset );
+    friend double poly_area( const std::vector< vec2d > & pnt_vec );
+    friend vec2d poly_centroid( const std::vector< vec2d > & pnt_vec );
 
 };
 

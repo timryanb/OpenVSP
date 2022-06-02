@@ -30,7 +30,7 @@ void PntNodeCloud::ReserveMorePntNodes( int n )
 
 void PntNodeCloud::AddPntNode( const vec3d & pnt )
 {
-    m_PntNodes.emplace_back( pnt );
+    m_PntNodes.emplace_back( PntNode( pnt ) );
 }
 
 bool PntNodeCloud::UsedNode( int i )
@@ -68,14 +68,14 @@ void IndexPntNodes( PntNodeCloud & cloud, double tol )
     {
         if ( cloud.m_PntNodes[i].m_Index == -1 )
         {
-            std::vector<std::pair<size_t, double> >   ret_matches;
+            std::vector < std::pair < unsigned int, double > > ret_matches;
 
             nanoflann::SearchParams params;
             index.radiusSearch( &cloud.m_PntNodes[i].m_Pnt[0], tol, ret_matches, params );
 
             for ( size_t j = 0 ; j < ret_matches.size() ; j++ )
             {
-                size_t m_ind = ret_matches[j].first;
+                unsigned int m_ind = ret_matches[j].first;
                 cloud.m_PntNodes[ m_ind ].m_Index = i;
             }
             cloud.m_PntNodes[i].m_UsedIndex = cnt;

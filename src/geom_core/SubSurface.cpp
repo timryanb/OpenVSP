@@ -13,6 +13,8 @@
 #include "Vehicle.h"
 #include "ParmMgr.h"
 #include "StructureMgr.h"
+#include "Vec2d.h"
+#include "VspUtil.h"
 
 #include "eli/geom/intersect/specified_distance_curve.hpp"
 
@@ -68,6 +70,9 @@ SubSurface::SubSurface( const string& compID, int type )
 
     m_CapFeaPropertyIndex.Init( "CapFeaPropertyIndex", "FeaSubSurface", this, 1, 0, 1e12 ); // Beam property default
     m_CapFeaPropertyIndex.SetDescript( "FeaPropertyIndex for Beam (Cap) Elements" );
+
+    m_FeaOrientationType.Init( "Orientation", "FeaSubSurface", this, vsp::FEA_ORIENT_PART_U, vsp::FEA_ORIENT_GLOBAL_X, vsp::FEA_NUM_ORIENT_TYPES - 1 );
+    m_FeaOrientationType.SetDescript( "Part material orientation type" );
 }
 
 SubSurface::~SubSurface()
@@ -167,7 +172,9 @@ void SubSurface::UpdateDrawObjs()
 
             int isurf = m_MainSurfIndx();
 
-            vector < int > symms = geom->GetSymmIndexs( isurf );
+            vector < int > symms;
+            geom->GetSymmIndexs( isurf, symms );
+
             assert( ncopy == symms.size() );
 
             for ( int s = 0 ; s < ncopy ; s++ )
@@ -188,8 +195,101 @@ void SubSurface::UpdateDrawObjs()
 
 void SubSurface::Update()
 {
+    UpdateOrientation();
+
     m_PolyPntsReadyFlag = false;
     UpdateDrawObjs();
+}
+
+void SubSurface::UpdateOrientation()
+{
+    Vehicle* veh = VehicleMgr.GetVehicle();
+
+    if ( !veh )
+    {
+        return;
+    }
+
+    Geom *geom = veh->FindGeom( m_CompID );
+
+    if ( !geom )
+    {
+        return;
+    }
+
+    vec3d orient;
+    if ( m_FeaOrientationType() == vsp::FEA_ORIENT_GLOBAL_X ||
+         m_FeaOrientationType() == vsp::FEA_ORIENT_GLOBAL_Y ||
+         m_FeaOrientationType() == vsp::FEA_ORIENT_GLOBAL_Z )
+    {
+        orient = vec3d( 0, 0, 0 );
+    }
+    else if ( m_FeaOrientationType() == vsp::FEA_ORIENT_COMP_X )
+    {
+        orient = vec3d( 1.0, 0, 0 );
+        Matrix4d model_matrix = geom->getModelMatrix();
+        orient = model_matrix.xformnorm( orient );
+    }
+    else if ( m_FeaOrientationType() == vsp::FEA_ORIENT_COMP_Y )
+    {
+        orient = vec3d( 0, 1.0, 0 );
+        Matrix4d model_matrix = geom->getModelMatrix();
+        orient = model_matrix.xformnorm( orient );
+    }
+    else if ( m_FeaOrientationType() == vsp::FEA_ORIENT_COMP_Z )
+    {
+        orient = vec3d( 0, 0, 1.0 );
+        Matrix4d model_matrix = geom->getModelMatrix();
+        orient = model_matrix.xformnorm( orient );
+    }
+    else if ( m_FeaOrientationType() == vsp::FEA_ORIENT_OML_R )
+    {
+        orient = geom->CompTanR( m_MainSurfIndx(), 0.5, 0.25, 0.5 );
+    }
+    else if ( m_FeaOrientationType() == vsp::FEA_ORIENT_OML_S )
+    {
+        orient = geom->CompTanS( m_MainSurfIndx(), 0.5, 0.25, 0.5 );
+    }
+    else if ( m_FeaOrientationType() == vsp::FEA_ORIENT_OML_T )
+    {
+        orient = geom->CompTanT( m_MainSurfIndx(), 0.5, 0.25, 0.5 );
+    }
+    else if ( m_FeaOrientationType() == vsp::FEA_ORIENT_OML_U ||
+              m_FeaOrientationType() == vsp::FEA_ORIENT_PART_U )
+    {
+        UpdatePolygonPnts();
+
+        // Control surface subsurfaces can have more than one polygon.  Use the first one either way.
+        vec2d centroid = poly_centroid( m_PolyPntsVec[0] );
+
+        orient = geom->CompTanU( m_MainSurfIndx(), centroid.x(), centroid.y() );
+    }
+    else if ( m_FeaOrientationType() == vsp::FEA_ORIENT_OML_V ||
+              m_FeaOrientationType() == vsp::FEA_ORIENT_PART_V )
+    {
+        UpdatePolygonPnts();
+
+        // Control surface subsurfaces can have more than one polygon.  Use the first one either way.
+        vec2d centroid = poly_centroid( m_PolyPntsVec[0] );
+
+        orient = geom->CompTanW( m_MainSurfIndx(), centroid.x(), centroid.y() );
+    }
+
+    orient.normalize();
+
+    // Fill out symmetrical copies of orientation.
+    int ncopy = geom->GetNumSymmCopies();
+
+    m_FeaOrientationVec.clear();
+    m_FeaOrientationVec.resize( ncopy, orient );
+
+    vector < int > symms;
+    geom->GetSymmIndexs( m_MainSurfIndx(), symms );
+    vector<Matrix4d> transMats = geom->GetFeaTransMatVec();
+    for ( size_t j = 1; j < ncopy; j++ )
+    {
+        m_FeaOrientationVec[j] = transMats[ symms[ j ] ].xformnorm( m_FeaOrientationVec[j] );
+    }
 }
 
 std::string SubSurface::GetTypeName( int type )
@@ -213,6 +313,10 @@ std::string SubSurface::GetTypeName( int type )
     if ( type == vsp::SS_LINE_ARRAY )
     {
         return string( "Line_Array" );
+    }
+    if ( type == vsp::SS_FINITE_LINE )
+    {
+        return string( "Finite_Line" );
     }
     return string( "NONE" );
 }
@@ -290,14 +394,14 @@ void SubSurface::UpdatePolygonPnts()
 
     m_PolyPntsVec[0].clear();
 
-    int last_ind = m_LVec.size() - 1;
     vec3d pnt;
-    for ( int ls = 0; ls < last_ind + 1; ls++ )
+    int ls;
+    for ( ls = 0; ls < m_LVec.size(); ls++ )
     {
         pnt = m_LVec[ls].GetP0();
         m_PolyPntsVec[0].push_back( vec2d( pnt.x(), pnt.y() ) );
     }
-    pnt = m_LVec[last_ind].GetP1();
+    pnt = m_LVec[ls - 1].GetP1();
     m_PolyPntsVec[0].push_back( vec2d( pnt.x(), pnt.y() ) );
 
     m_PolyPntsReadyFlag = true;
@@ -548,23 +652,8 @@ vec3d SSLineSeg::CompPnt( VspSurf* surf, vec3d uw_pnt ) const
     double maxu = surf->GetUMax();
     double maxw = surf->GetWMax();
 
-    if ( uw_pnt.x() < 0.0 )
-    {
-        uw_pnt.set_x( 0.0 );
-    }
-    else if ( uw_pnt.x() > maxu )
-    {
-        uw_pnt.set_x( maxu );
-    }
-
-    if ( uw_pnt.y() < 0.0 )
-    {
-        uw_pnt.set_y( 0.0 );
-    }
-    else if ( uw_pnt.y() > maxw )
-    {
-        uw_pnt.set_y( maxw );
-    }
+    uw_pnt.v[0] = clamp( uw_pnt.v[0], 0.0, maxu );
+    uw_pnt.v[1] = clamp( uw_pnt.v[1], 0.0, maxw );
 
     return surf->CompPnt( uw_pnt.x(), uw_pnt.y() );
 }
@@ -1885,7 +1974,9 @@ void SSControlSurf::UpdateDrawObjs()
 
         int isurf = m_MainSurfIndx();
 
-        vector < int > symms = geom->GetSymmIndexs( isurf );
+        vector < int > symms;
+        geom->GetSymmIndexs( isurf, symms );
+
         assert( ncopy == symms.size() );
 
         int npt = m_UWStart01.size();
@@ -2188,4 +2279,50 @@ int SSLineArray::CompNumDrawPnts( Geom* geom )
     }
 
     return -1;
+}
+
+//////////////////////////////////////////////////////
+//=================== SSFiniteLine =====================//
+//////////////////////////////////////////////////////
+
+SSFiniteLine::SSFiniteLine( const string& comp_id, int type ) : SubSurface( comp_id, type )
+{
+    m_UStart.Init( "UStart", "SS_FiniteLine", this, 0.4, 0, 1 );
+    m_UStart.SetDescript( "The U starting location of the finite line" );
+
+    m_UEnd.Init( "UEnd", "SS_FiniteLine", this, 0.6, 0, 1 );
+    m_UEnd.SetDescript( "The U ending location of the finite line" );
+
+    m_WStart.Init( "WStart", "SS_FiniteLine", this, 0.3, 0, 1 );
+    m_WStart.SetDescript( "The W starting location of the finite line" );
+
+    m_WEnd.Init( "WEnd", "SS_FiniteLine", this, 0.3, 0, 1 );
+    m_WEnd.SetDescript( "The W ending location of the finite line" );
+
+    m_TestType.Init( "Test_Type", "SubSurface", this, SSLineSeg::NO, SSLineSeg::NO, SSLineSeg::NO );
+    m_TestType.SetDescript( "Tag surface as being either greater than or less than const value line" );
+
+    m_LVec.resize( 1 );
+}
+
+SSFiniteLine::~SSFiniteLine()
+{
+}
+
+void SSFiniteLine::Update()
+{
+    // Using m_LVec[0] since SSLine should always only have one line segment
+    // Update SSegLine points based on current values
+    m_LVec[0].SetSP0( vec3d( m_UStart(), m_WStart(), 0 ) );
+    m_LVec[0].SetSP1( vec3d( m_UEnd(), m_WEnd(), 0 ) );
+
+    m_LVec[0].m_TestType = m_TestType();
+    Geom* geom = VehicleMgr.GetVehicle()->FindGeom( m_CompID );
+    if ( !geom )
+    {
+        return;
+    }
+    m_LVec[0].Update( geom );
+
+    SubSurface::Update();
 }

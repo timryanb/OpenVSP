@@ -17,6 +17,7 @@
 
 class Surf;
 class SimpleGridDensity;
+class SurfaceIntersectionSingleton;
 
 #ifndef WIN32
 #  ifndef NDEBUG
@@ -104,7 +105,7 @@ public:
 
     static void TriangulateBorder( const vector< vec3d > &uw_border );
 
-    void InitMesh( vector< vec2d > & uw_points, vector< MeshSeg > & segs_indexes );
+    void InitMesh( vector< vec2d > & uw_points, vector< MeshSeg > & segs_indexes, SurfaceIntersectionSingleton *MeshMgr );
 
     static void CheckValidTriInput( vector< vec2d > & uw_points, vector< MeshSeg > & segs_indexes );
 
@@ -157,15 +158,6 @@ public:
 
     void RemoveInteriorTrisEdgesNodes();
 
-    int GetNumFixPointIter()
-    {
-        return m_NumFixPointIter;
-    }
-    void ResetNumFixPointIter()
-    {
-        m_NumFixPointIter = 0;
-    }
-
 protected:
 
     Surf* m_Surf;
@@ -185,8 +177,6 @@ protected:
     vector< vec3d > simpPntVec;
     vector< vec2d > simpUWPntVec;
     vector< SimpTri > simpTriVec;
-
-    int m_NumFixPointIter;
 };
 
 

@@ -342,6 +342,13 @@ public:
 
     SliderAdjRangeInput m_SSConTessSlider;
 
+    // SS_FiniteLine
+    GroupLayout m_SSFLineGroup;
+    SliderAdjRangeInput m_SSFLineUStartSlider;
+    SliderAdjRangeInput m_SSFLineUEndSlider;
+    SliderAdjRangeInput m_SSFLineWStartSlider;
+    SliderAdjRangeInput m_SSFLineWEndSlider;
+
 protected:
     bool m_RotActive;
     string m_GeomTypeName;
@@ -647,6 +654,67 @@ protected:
     SkinControl m_LeftSlewSkinControl;
     SkinControl m_LeftStrengthSkinControl;
     SkinControl m_LeftCurvatureSkinControl;
+
+};
+
+//==== Chevron Screen ====//
+class ChevronScreen : public SkinScreen
+{
+public:
+    ChevronScreen( ScreenMgr* mgr, int w, int h, const string & title );
+    virtual ~ChevronScreen()                               {}
+
+    virtual bool Update( );
+    virtual void CallBack( Fl_Widget *w );
+    virtual void GuiDeviceCallBack( GuiDevice* device );
+    static void staticScreenCB( Fl_Widget *w, void* data )
+    {
+        ( ( static_cast <ChevronScreen*>( data ) )->CallBack( w ) );
+    }
+
+protected:
+    GroupLayout m_ModifyLayout;
+
+    IndexSelector m_XsecModIndexSelector;
+
+    Choice m_ChevronModeChoice;
+
+    SliderAdjRangeInput m_ChevTopAmpSlider;
+    SliderAdjRangeInput m_ChevBottomAmpSlider;
+    SliderAdjRangeInput m_ChevLeftAmpSlider;
+    SliderAdjRangeInput m_ChevRightAmpSlider;
+
+    SliderInput m_ChevNumberSlider;
+
+    SliderAdjRangeInput m_ChevOnDutySlider;
+    SliderAdjRangeInput m_ChevOffDutySlider;
+
+    Choice m_ChevronExtentModeChoice;
+
+    Choice m_ChevW01StartChoice;
+    SliderAdjRangeInput m_ChevW01StartSlider;
+    Choice m_ChevW01EndChoice;
+    SliderAdjRangeInput m_ChevW01EndSlider;
+    Choice m_ChevW01CenterChoice;
+    SliderAdjRangeInput m_ChevW01CenterSlider;
+    SliderAdjRangeInput m_ChevW01WidthSlider;
+
+    SliderAdjRangeInput m_ChevDirTopAngleSlider;
+    SliderAdjRangeInput m_ChevDirBottomAngleSlider;
+    SliderAdjRangeInput m_ChevDirRightAngleSlider;
+    SliderAdjRangeInput m_ChevDirLeftAngleSlider;
+
+    SliderAdjRangeInput m_ChevDirTopSlewSlider;
+    SliderAdjRangeInput m_ChevDirBottomSlewSlider;
+    SliderAdjRangeInput m_ChevDirRightSlewSlider;
+    SliderAdjRangeInput m_ChevDirLeftSlewSlider;
+
+    ToggleButton m_ChevAngleAllSymButton;
+    ToggleButton m_ChevAngleTBSymButton;
+    ToggleButton m_ChevAngleRLSymButton;
+
+    SliderAdjRangeInput m_ChevValleyRadSlider;
+    SliderAdjRangeInput m_ChevPeakRadSlider;
 
 };
 

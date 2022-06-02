@@ -725,9 +725,9 @@ void Vehicle::ForceUpdate( int dirtyflag )
 }
 
 //===== Run Script ====//
-void Vehicle::RunScript( const string & file_name, const string & function_name )
+int Vehicle::RunScript( const string & file_name, const string & function_name )
 {
-    ScriptMgr.ReadExecuteScriptFile( file_name, function_name );
+    return ScriptMgr.ReadExecuteScriptFile( file_name, function_name );
 }
 
 
@@ -979,7 +979,7 @@ string Vehicle::AddMeshGeom( int normal_set, int degen_set, bool suppressdisks )
                 vector< TMesh* > tMeshVec = g_ptr->CreateTMeshVec();
                 for ( int j = 0 ; j < ( int )tMeshVec.size() ; j++ )
                 {
-                    if ( suppressdisks && ( tMeshVec[i]->m_SurfType == vsp::DISK_SURF ) )
+                    if ( suppressdisks && ( tMeshVec[j]->m_SurfType == vsp::DISK_SURF ) )
                     {
                         // Skip actuator disk.
                     }
@@ -1011,7 +1011,7 @@ string Vehicle::AddMeshGeom( int normal_set, int degen_set, bool suppressdisks )
                     // Do not combine these loops.  tMeshVec.size() != DegenGeomVec.size()
                     for ( int j = 0 ; j < ( int )tMeshVec.size() ; j++ )
                     {
-                        if ( suppressdisks && ( tMeshVec[i]->m_SurfType == vsp::DISK_SURF ) )
+                        if ( suppressdisks && ( tMeshVec[j]->m_SurfType == vsp::DISK_SURF ) )
                         {
                             // Skip actuator disk.
                         }
@@ -3223,7 +3223,7 @@ void Vehicle::FetchXFerSurfs( int write_set, vector< XferSurf > &xfersurfs )
 
             for ( int j = 0; j < ( int )surf_vec.size(); j++ )
             {
-                surf_vec[j].FetchXFerSurf( geom_vec[i]->GetID(), geom_vec[i]->GetMainSurfID( j ), icomp, xfersurfs );
+                surf_vec[j].FetchXFerSurf( geom_vec[i]->GetID(), geom_vec[i]->GetMainSurfID( j ), icomp, j, xfersurfs );
                 icomp++;
             }
         }
@@ -3427,7 +3427,6 @@ void Vehicle::WriteStructureSTEPFile( const string & file_name )
     vector < double > usplit;
     vector < double > wsplit;
 
-    fea_struct->Update();
 
     vector < FeaPart* > fea_part_vec = fea_struct->GetFeaPartVec();
 
@@ -3590,7 +3589,6 @@ void Vehicle::WriteStructureIGESFile( const string & file_name, int feaMeshStruc
     vector < double > usplit;
     vector < double > wsplit;
 
-    fea_struct->Update();
 
     vector < FeaPart* > fea_part_vec = fea_struct->GetFeaPartVec();
 
@@ -4468,6 +4466,7 @@ void Vehicle::AddLinkableContainers( vector< string > & linkable_container_vec )
         geom_vec[i]->AddLinkableContainers( linkable_container_vec );
     }
 
+    m_ClippingMgr.AddLinkableContainers( linkable_container_vec );
     StructureMgr.AddLinkableContainers( linkable_container_vec );
 }
 
@@ -4684,7 +4683,7 @@ string Vehicle::CompGeom( int set, int degenset, int halfFlag, int intSubsFlag, 
     if ( mesh_ptr->m_TMeshVec.size() )
     {
         vector< DegenGeom > dg;
-        mesh_ptr->IntersectTrim( dg, false, halfFlag, intSubsFlag );
+        mesh_ptr->IntersectTrim( dg, false, intSubsFlag );
     }
     else
     {
@@ -4911,7 +4910,7 @@ string Vehicle::ImportFile( const string & file_name, int file_type )
     else if ( file_type == IMPORT_XSEC_WIRE )
     {
         FILE *fp;
-        char str[256];
+        char str[256] = {};
 
         //==== Make Sure File Exists ====//
         if ( ( fp = fopen( file_name.c_str(), "r" ) ) == ( FILE * )NULL )
@@ -5437,7 +5436,7 @@ void Vehicle::CreateDegenGeom( int set )
         MeshGeom* mesh_ptr = dynamic_cast<MeshGeom*> ( FindGeom( id ) );
         if ( mesh_ptr != NULL )
         {
-            mesh_ptr->IntersectTrim( m_DegenGeomVec, true, 0, 0 );
+            mesh_ptr->IntersectTrim( m_DegenGeomVec, true, 0 );
             DeleteGeom( id );
         }
     }
@@ -5729,6 +5728,21 @@ double Vehicle::AxisProjPnt01I(const std::string &geom_id, const int &iaxis, con
     idmin = -1;
 
     return idmin;
+}
+
+vec3d Vehicle::CompPntRST( const std::string &geom_id, const int &surf_indx, const double &r, const double &s, const double &t )
+{
+    Geom* geom_ptr = FindGeom( geom_id );
+    vec3d ret;
+    if ( geom_ptr )
+    {
+        if ( surf_indx >= 0 && surf_indx < geom_ptr->GetNumTotalSurfs() )
+        {
+            ret = geom_ptr->CompPntRST( surf_indx, r, s, t );
+        }
+    }
+
+    return ret;
 }
 
 // Method to add pnts and normals to results managers for all surfaces

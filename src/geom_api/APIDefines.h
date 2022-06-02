@@ -138,6 +138,17 @@ enum CF_TURB_EQN { CF_TURB_EXPLICIT_FIT_SPALDING = 0,
                    CF_TURB_HEATTRANSFER_WHITE_CHRISTOPH
                  }; // Friction Coefficient Turbulent Eqns ENUM
 
+enum CHEVRON_TYPE { CHEVRON_NONE,
+                    CHEVRON_PARTIAL,
+                    CHEVRON_FULL,
+                    CHEVRON_NUM_TYPES
+                  };
+
+enum CHEVRON_W01_MODES { CHEVRON_W01_SE, // Start and End
+                         CHEVRON_W01_CW, // Center and Width
+                         CHEVRON_W01_NUM_MODES
+                       };
+
 enum COLLISION_ERRORS { COLLISION_OK,
                         COLLISION_INTERSECT_NO_SOLUTION,
                         COLLISION_CLEAR_NO_SOLUTION,
@@ -184,7 +195,8 @@ enum DIMENSION_SET { SET_3D,
 
 enum DIR_INDEX { X_DIR = 0,
                  Y_DIR = 1,
-                 Z_DIR = 2
+                 Z_DIR = 2,
+                 ALL_DIR = 3
                };
 
 enum DISPLAY_TYPE { DISPLAY_BEZIER,
@@ -223,7 +235,8 @@ enum ERROR_CODE {   VSP_OK,
                     VSP_UNEXPECTED_RESET_REMAP_ID,
                     VSP_INVALID_INPUT_VAL,
                     VSP_INVALID_CF_EQN,
-                    VSP_INVALID_DRIVERS
+                    VSP_INVALID_DRIVERS,
+                    VSP_ADV_LINK_BUILD_FAIL
                 };
 
 enum EXCRES_TYPE { EXCRESCENCE_COUNT = 0,
@@ -282,9 +295,32 @@ enum FEA_EXPORT_TYPE { FEA_MASS_FILE_NAME,
                        FEA_NUM_FILE_NAMES
                      };
 
+enum FEA_MATERIAL_TYPE { FEA_ISOTROPIC,
+                         FEA_ENG_ORTHO,
+                         FEA_NUM_MAT_TYPES
+                       };
+
+enum FEA_ORIENTATION_TYPE { FEA_ORIENT_GLOBAL_X,
+                            FEA_ORIENT_GLOBAL_Y,
+                            FEA_ORIENT_GLOBAL_Z,
+                            FEA_ORIENT_COMP_X,
+                            FEA_ORIENT_COMP_Y,
+                            FEA_ORIENT_COMP_Z,
+                            FEA_ORIENT_PART_U,
+                            FEA_ORIENT_PART_V,
+                            FEA_ORIENT_OML_U,
+                            FEA_ORIENT_OML_V,
+                            FEA_ORIENT_OML_R,
+                            FEA_ORIENT_OML_S,
+                            FEA_ORIENT_OML_T,
+                            FEA_NUM_ORIENT_TYPES
+                          };
+
 enum FEA_PART_ELEMENT_TYPE { FEA_SHELL = 0,
                              FEA_BEAM,
-                             FEA_SHELL_AND_BEAM
+                             FEA_SHELL_AND_BEAM,
+                             FEA_NO_ELEMENTS,
+                             FEA_NUM_ELEMENT_TYPES
                            };
 
 enum FEA_PART_TYPE { FEA_SLICE = 0,
@@ -295,6 +331,7 @@ enum FEA_PART_TYPE { FEA_SLICE = 0,
                      FEA_RIB_ARRAY,
                      FEA_SLICE_ARRAY,
                      FEA_SKIN,
+                     FEA_TRIM,
                      FEA_NUM_TYPES
                    };
 
@@ -528,6 +565,7 @@ enum SUBSURF_TYPE { SS_LINE,
                     SS_ELLIPSE,
                     SS_CONTROL,
                     SS_LINE_ARRAY,
+                    SS_FINITE_LINE,
                     SS_NUM_TYPES
                   };
 
@@ -580,7 +618,8 @@ enum VIEW_TYPE { VIEW_LEFT,
                  VIEW_BOTTOM,
                  VIEW_FRONT,
                  VIEW_REAR,
-                 VIEW_NONE
+                 VIEW_NONE,
+                 VIEW_NUM_TYPES
                };
 
 enum VSPAERO_ANALYSIS_METHOD { VORTEX_LATTICE,
@@ -630,6 +669,14 @@ enum VSP_SURF_TYPE { NORMAL_SURF,
                      PROP_SURF,
                      NUM_SURF_TYPES,
                    };
+
+enum W_HINT { W_RIGHT_0,
+              W_BOTTOM,
+              W_LEFT,
+              W_TOP,
+              W_RIGHT_1,
+              W_FREE,
+            };
 
 enum WING_BLEND { BLEND_FREE,
                   BLEND_ANGLES,

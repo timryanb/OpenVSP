@@ -37,6 +37,7 @@ extern void VSPRenew();
 extern void Update( bool update_managers = true );
 extern void VSPExit( int error_code );
 
+extern std::string GetVSPVersion();
 extern std::string GetVSPExePath();
 
 extern bool SetVSPAEROPath( const std::string & path );
@@ -252,7 +253,9 @@ extern void SetXSecTanSlews( const std::string& xsec_id, int side, double top, d
 extern void SetXSecTanStrengths( const std::string& xsec_id, int side, double top, double right, double bottom, double left );
 extern void SetXSecCurvatures( const std::string& xsec_id, int side, double top, double right, double bottom, double left );
 extern void ReadFileAirfoil( const std::string& xsec_id, const std::string& file_name );
-extern void SetAirfoilPnts( const std::string& xsec_id, std::vector< vec3d > & up_pnt_vec, std::vector< vec3d > & low_pnt_vec );
+extern void SetAirfoilUpperPnts( const std::string& xsec_id, const std::vector< vec3d > & up_pnt_vec );
+extern void SetAirfoilLowerPnts( const std::string& xsec_id, const std::vector< vec3d > & low_pnt_vec );
+extern void SetAirfoilPnts( const std::string& xsec_id, const std::vector< vec3d > & up_pnt_vec, const std::vector< vec3d > & low_pnt_vec );
 extern std::vector<vec3d> GetHersheyBarLiftDist( const int &npts, const double &alpha, const double &Vinf, const double &span, bool full_span_flag = false );
 extern std::vector<vec3d> GetHersheyBarDragDist( const int &npts, const double &alpha, const double &Vinf, const double &span, bool full_span_flag = false );
 extern std::vector<vec3d> GetVKTAirfoilPnts( const int &npts, const double &alpha, const double &epsilon, const double &kappa, const double &tau );
@@ -283,7 +286,9 @@ extern void SetBORXSecPnts( const std::string& bor_id, std::vector< vec3d > & pn
 extern vec3d ComputeBORXSecPnt( const std::string& bor_id, double fract );
 extern vec3d ComputeBORXSecTan( const std::string& bor_id, double fract );
 extern void ReadBORFileAirfoil( const std::string& bor_id, const std::string& file_name );
-extern void SetBORAirfoilPnts( const std::string& bor_id, std::vector< vec3d > & up_pnt_vec, std::vector< vec3d > & low_pnt_vec );
+extern void SetBORAirfoilUpperPnts( const std::string& bor_id, const std::vector< vec3d > & up_pnt_vec );
+extern void SetBORAirfoilLowerPnts( const std::string& bor_id, const std::vector< vec3d > & low_pnt_vec );
+extern void SetBORAirfoilPnts( const std::string& bor_id, const std::vector< vec3d > & up_pnt_vec, const std::vector< vec3d > & low_pnt_vec );
 extern std::vector<vec3d> GetBORAirfoilUpperPnts( const std::string& bor_id );
 extern std::vector<vec3d> GetBORAirfoilLowerPnts( const std::string& bor_id );
 extern std::vector<double> GetBORUpperCSTCoefs( const std::string& bor_id );
@@ -308,7 +313,7 @@ extern void EditXSecInitShape( const std::string & xsec_id );
 extern void EditXSecConvertTo( const std::string & xsec_id, const int & newtype );
 extern std::vector < double > GetEditXSecUVec( const std::string& xsec_id );
 extern std::vector < vec3d > GetEditXSecCtrlVec( const std::string & xsec_id, const bool non_dimensional = true );
-extern void SetEditXSecPnts( const std::string & xsec_id, std::vector < double > u_vec, std::vector < vec3d > control_pts );
+extern void SetEditXSecPnts( const std::string & xsec_id, std::vector < double > u_vec, std::vector < vec3d > control_pts, std::vector < double > r_vec );
 extern void EditXSecDelPnt( const std::string & xsec_id, const int & indx );
 extern int EditXSecSplit01( const std::string & xsec_id, const double & u );
 extern void MoveEditXSecPnt( const std::string & xsec_id, const int & indx, const vec3d & new_pnt );
@@ -456,6 +461,14 @@ extern double ProjPnt01Guess(const std::string &geom_id, const int &surf_indx, c
 extern double AxisProjPnt01(const std::string &geom_id, const int &surf_indx, const int &iaxis, const vec3d &pt, double &u_out, double &w_out, vec3d &p_out);
 extern double AxisProjPnt01I(const std::string &geom_id, const int &iaxis, const vec3d &pt, int &surf_indx_out, double &u_out, double &w_out, vec3d &p_out);
 extern double AxisProjPnt01Guess(const std::string &geom_id, const int &surf_indx, const int &iaxis, const vec3d &pt, const double &u0, const double &w0, double &u_out, double &w_out, vec3d &p_out);
+extern bool InsideSurf( const std::string &geom_id, const int &surf_indx, const vec3d &pt );
+
+extern vec3d CompPntRST( const std::string &geom_id, const int &surf_indx, const double &r, const double &s, const double &t );
+extern double FindRST( const std::string &geom_id, const int &surf_indx, const vec3d &pt, double &r_out, double &s_out, double &t_out );
+extern double FindRSTGuess( const std::string &geom_id, const int &surf_indx, const vec3d &pt, const double &r0, const double &s0, const double &t0, double &r_out, double &s_out, double &t_out );
+
+extern void ConvertRSTtoLMN( const std::string &geom_id, const int &surf_indx, const double &r, const double &s, const double &t, double &l, double &m, double &n );
+extern void ConvertLMNtoRST( const std::string &geom_id, const int &surf_indx, const double &l, const double &m, const double &n, double &r, double &s, double &t );
 
 extern std::vector < vec3d > CompVecPnt01(const std::string &geom_id, const int &surf_indx, const std::vector < double > &u_in_vec, const std::vector < double > &w_in_vec);
 extern std::vector < vec3d > CompVecNorm01(const std::string &geom_id, const int &surf_indx, const std::vector < double > &us, const std::vector < double > &ws);
@@ -465,6 +478,16 @@ extern void ProjVecPnt01Guess(const std::string &geom_id, const int &surf_indx, 
 
 extern void AxisProjVecPnt01(const std::string &geom_id, const int &surf_indx, const int &iaxis, const std::vector < vec3d > &pts, std::vector < double > &u_out_vec, std::vector < double > &w_out_vec, std::vector < vec3d > &pt_out_vec, std::vector < double > &d_out_vec );
 extern void AxisProjVecPnt01Guess(const std::string &geom_id, const int &surf_indx, const int &iaxis, const std::vector < vec3d > &pts, const std::vector < double > &u0s, const std::vector < double > &w0s, std::vector < double > &u_out_vec, std::vector < double > &w_out_vec, std::vector < vec3d > &pt_out_vec, std::vector < double > &d_out_vec );
+extern std::vector < bool > VecInsideSurf( const std::string &geom_id, const int &surf_indx, const std::vector < vec3d > &pts );
+
+extern std::vector < vec3d > CompVecPntRST( const std::string &geom_id, const int &surf_indx, const std::vector < double > &r_in_vec, const std::vector < double > &s_in_vec, const std::vector < double > &t_in_vec );
+extern void FindRSTVec( const std::string &geom_id, const int &surf_indx, const std::vector < vec3d > &pts, std::vector < double > &r_out_vec, std::vector < double > &s_out_vec, std::vector < double > &t_out_vec, std::vector < double > &d_out_vec );
+extern void FindRSTVecGuess( const std::string &geom_id, const int &surf_indx, const std::vector < vec3d > &pts, const std::vector < double > &r0s, const std::vector < double > &s0s, const std::vector < double > &t0s, std::vector < double > &r_out_vec, std::vector < double > &s_out_vec, std::vector < double > &t_out_vec, std::vector < double > &d_out_vec );
+
+extern void ConvertRSTtoLMNVec( const std::string &geom_id, const int &surf_indx, const std::vector < double > &r_vec, const std::vector < double > &s_vec, const std::vector < double > &t_vec,
+                                std::vector < double > &l_out_vec, std::vector < double > &m_out_vec, std::vector < double > &n_out_vec );
+extern void ConvertLMNtoRSTVec( const std::string &geom_id, const int &surf_indx, const std::vector < double > &l_vec, const std::vector < double > &m_vec, const std::vector < double > &n_vec,
+                                std::vector < double > &r_out_vec, std::vector < double > &s_out_vec, std::vector < double > &t_out_vec );
 
 extern void GetUWTess01(const std::string &geom_id, const int &surf_indx, std::vector < double > &u_out_vec, std::vector < double > &w_out_vec);
 

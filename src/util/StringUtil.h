@@ -25,6 +25,7 @@ void replace_all( string & str, const string & from, const string & to  );
 
 void remove_leading( string & str, char c );
 void remove_trailing( string & str, char c );
+void remove_leading_trailing( string & str, char c );
 
 string int_to_string( int i, const char* format );
 string double_to_string( double v, const char* format );
@@ -37,6 +38,8 @@ int compute_hash( const string & str );
 string get_delim( int delim_type );
 
 string truncateFileName( const string &fn, int len );
+
+string NasFmt( double input );
 
 }
 

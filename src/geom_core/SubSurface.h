@@ -124,6 +124,7 @@ public:
     virtual bool Subtag( TTri* tri ); // Method to subtag triangles from TMesh.
     virtual bool Subtag( const vec3d & center );
     virtual void Update();
+    virtual void UpdateOrientation();
     virtual void UpdatePolygonPnts();
     virtual std::vector< TMesh* > CreateTMeshVec() const; // Method to create a TMeshVector
     virtual void UpdateDrawObjs(); // Method to create lines to draw
@@ -158,6 +159,9 @@ public:
     BoolParm m_DrawFeaPartFlag;
     IntParm m_FeaPropertyIndex;
     IntParm m_CapFeaPropertyIndex;
+    IntParm m_FeaOrientationType;
+
+    std::vector < vec3d > m_FeaOrientationVec;
 
 protected:
     string m_CompID; // Component ID used to match Subsurface to a specific geom
@@ -322,5 +326,24 @@ class SSLineArray : public SubSurface
 
     int m_NumLines;
 };
+
+class SSFiniteLine : public SubSurface
+{
+public:
+
+    SSFiniteLine( const string& compID, int type = vsp::SS_FINITE_LINE );
+    virtual ~SSFiniteLine();
+
+    Parm m_UStart;
+    Parm m_UEnd;
+    Parm m_WStart;
+    Parm m_WEnd;
+
+    virtual void Update();
+
+protected:
+
+};
+
 
 #endif

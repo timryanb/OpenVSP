@@ -122,7 +122,7 @@ public:
     virtual void TrimLE( bool wingtype );
     virtual void CapTE( bool wingtype );
     virtual void CapLE( bool wingtype );
-
+    virtual void Chevron();
     virtual void RotTransScale();
 
     virtual void ReadV2FileFuse2( xmlNodePtr &root );
@@ -131,7 +131,7 @@ public:
 
     // Convert any XSec into an editable type. This function will default the XSec to 
     // cubic Bezier with symmetry off.
-    static EditCurveXSec* ConvertToEdit( XSecCurve* original_curve );
+    virtual EditCurveXSec* ConvertToEdit();
 
     IntParm m_TECloseType;
     IntParm m_TECloseAbsRel;
@@ -177,6 +177,44 @@ public:
     Parm m_DeltaX;
     Parm m_DeltaY;
     Parm m_ShiftLE;
+
+    IntParm m_ChevronType;
+
+    Parm m_ChevTopAmplitude;
+    Parm m_ChevBottomAmplitude;
+    Parm m_ChevRightAmplitude;
+    Parm m_ChevLeftAmplitude;
+
+    IntParm m_ChevNumber;
+
+    Parm m_ChevOnDuty;
+    Parm m_ChevOffDuty;
+
+    IntParm m_ChevronExtentMode;
+    IntParm m_ChevW01StartGuide;
+    Parm m_ChevW01Start;
+    IntParm m_ChevW01EndGuide;
+    Parm m_ChevW01End;
+    IntParm m_ChevW01CenterGuide;
+    Parm m_ChevW01Center;
+    Parm m_ChevW01Width;
+
+    Parm m_ChevTopAngle;
+    Parm m_ChevBottomAngle;
+    Parm m_ChevRightAngle;
+    Parm m_ChevLeftAngle;
+
+    Parm m_ChevTopSlew;
+    Parm m_ChevBottomSlew;
+    Parm m_ChevRightSlew;
+    Parm m_ChevLeftSlew;
+
+    BoolParm m_ChevDirAngleAllSymFlag;
+    BoolParm m_ChevDirAngleTBSymFlag;
+    BoolParm m_ChevDirAngleRLSymFlag;
+
+    Parm m_ValleyRad;
+    Parm m_PeakRad;
 
     // XSec Background Parms
     BoolParm m_XSecImagePreserveAR;
@@ -361,6 +399,8 @@ public:
 
     virtual void Interp( XSecCurve *start, XSecCurve *end, double frac );
 
+    virtual EditCurveXSec* ConvertToEdit();
+
     Parm m_Width;
     Parm m_Height;
     IntParm m_RadiusSymmetryType;
@@ -480,6 +520,10 @@ public:
 
     virtual void UpdateCurve( bool updateParms = true );
 
+    virtual void RoundCorners();
+
+    virtual void SetScale( double scale );
+
     virtual xmlNodePtr EncodeXml( xmlNodePtr& node );
     virtual xmlNodePtr DecodeXml( xmlNodePtr& node );
 
@@ -495,11 +539,11 @@ public:
     virtual void EnforcePtOrder( double rfirst = 0.0, double rlast = 1.0 );
 
     // Get either the relative or absolute control point vector
-    virtual vector< vec3d > GetCtrlPntVec( bool non_dimensional = false );
+    virtual vector< vec3d > GetCtrlPntVec( bool non_dimensional = false, bool skip_last = false );
 
     // Functions to set the control point vector, parameterization, and G1 enforcement vector
-    virtual void SetPntVecs( vector < double > u_vec, vector < double > x_pnt_vec, vector < double > y_pnt_vec, vector < bool > g1_vec = {}, vector < bool > fix_u_vec = {}, bool force_update = true );
-    virtual void SetPntVecs( vector < double > u_vec, vector < vec3d > pnt_vec, vector < bool > g1_vec = {}, vector < bool > fix_u_vec = {}, bool force_update = true );
+    virtual void SetPntVecs( vector < double > u_vec, vector < double > x_pnt_vec, vector < double > y_pnt_vec, vector < double > z_pnt_vec, vector < double > r_vec, vector < bool > g1_vec = {}, vector < bool > fix_u_vec = {}, bool force_update = true );
+    virtual void SetPntVecs( vector < double > u_vec, vector < vec3d > pnt_vec, vector < double > r_vec, vector < bool > g1_vec = {}, vector < bool > fix_u_vec = {}, bool force_update = true );
 
     // Move a control point of input index to a new 2D location. If the point moving is 
     // cubic Bezier and located on the curve, the neighboring points will move with it. 
@@ -509,7 +553,9 @@ public:
     // Move the currently selected control point to the new x and y position. The 
     // neighbors_only flag is used to move CEDIT neighbors when the point on the
     // curve is set by GUI elements
-    virtual void MovePnt( double x, double y, bool neighbors_only = false );
+    virtual void MovePnt( double x, double y, double z, bool neighbors_only = false );
+
+    virtual void MovePnt( vec3d mpt, int iignore, bool neighbors_only = false );
 
     // Setter and getter for the currently selected point index
     virtual void SetSelectPntID( int id );
@@ -517,7 +563,7 @@ public:
 
     // Append a new point to the parameter vectors (i.e. m_XParmVec). Note, this does not ensure 
     // proper parameterization
-    virtual void AddPt( double default_u = 0.0, double default_x = 0.0, double default_y = 0.0, bool default_g1 = false, bool default_fix_u = false );
+    virtual void AddPt( double default_u = 0.0, double default_x = 0.0, double default_y = 0.0, double default_z = 0.0, double default_r = 0.0, bool default_g1 = false, bool default_fix_u = false );
 
     // Delete the currently selected point, or the input index. Intermediate cubic bezier control
     // points can not be deleted.
@@ -542,6 +588,8 @@ public:
     virtual vector < double > GetTVec();
     virtual vector < double > GetXVec();
     virtual vector < double > GetYVec();
+    virtual vector < double > GetZVec();
+    virtual vector < double > GetRVec();
     virtual vector < bool > GetG1Vec();
     virtual vector < bool > GetFixedUVec();
 
@@ -565,11 +613,14 @@ public:
     virtual string GetWidthParmID() { return m_Width.GetID(); }
     virtual string GetHeightParmID() { return m_Height.GetID(); }
 
+    IntParm m_View;
+
     BoolParm m_CloseFlag;
     BoolParm m_SymType;
     IntParm m_ShapeType;
     Parm m_Width;
     Parm m_Height;
+    Parm m_Depth;
     IntParm m_CurveType;
     IntParm m_ConvType;
     Parm m_SplitU;
@@ -584,6 +635,8 @@ public:
     vector < Parm* > m_UParmVec; // vector of U (0-1) values for each control point (in reallity 0-4 for XSec curves; T)
     vector < FractionParm* > m_XParmVec; // vector of control point x coordinates
     vector < FractionParm* > m_YParmVec; // vector of control point y coordinates
+    vector < FractionParm* > m_ZParmVec; // vector of control point z coordinates
+    vector < Parm* > m_RParmVec; // vector of corner radii
     vector < BoolParm* > m_EnforceG1Vec; // indicates whether or not to enforce G1 continuity for each CEDIT point on the curve,
     vector < BoolParm* > m_FixedUVec; // vector that identifies if ach index of m_UParmVec is held constant. This is mainly used for reparameterization
 
@@ -612,6 +665,7 @@ protected:
 
     bool m_EnforceG1Next; // Flag to indicate if G1 should be enforced with the next or previous point
 
+    VspCurve m_UnroundedCurve;
 };
 
 //==========================================================================//

@@ -22,9 +22,11 @@
 
 #include "eli/geom/surface/piecewise_body_of_revolution_creator.hpp"
 #include "eli/geom/surface/piecewise_multicap_surface_creator.hpp"
+#include "eli/geom/intersect/find_rst_surface.hpp"
 #include "eli/geom/intersect/minimum_distance_surface.hpp"
 #include "eli/geom/intersect/distance_angle_surface.hpp"
 #include "eli/geom/intersect/intersect_axis_surface.hpp"
+#include "eli/geom/intersect/intersect_segment_surface.hpp"
 
 typedef piecewise_surface_type::index_type surface_index_type;
 typedef piecewise_surface_type::point_type surface_point_type;
@@ -52,6 +54,9 @@ VspSurf::VspSurf()
     m_SurfType = vsp::NORMAL_SURF;
     m_SurfCfdType = vsp::CFD_NORMAL;
     m_SkinType = SKIN_NONE;
+
+    m_FeaOrientationType = vsp::FEA_ORIENT_OML_U;
+    m_FeaOrientation = vec3d();
 
     m_CloneIndex = -1;
 
@@ -130,6 +135,8 @@ void VspSurf::Transform( Matrix4d & mat )
 
     m_Surface.rotate( rmat );
     m_Surface.translate( trans );
+
+    m_FeaOrientation = mat.xformnorm( m_FeaOrientation );
 }
 
 void VspSurf::GetBoundingBox( BndBox &bb ) const
@@ -286,6 +293,47 @@ void VspSurf::GuessDistanceAngle( double &du, double &dw, const vec3d &udir, con
     }
 }
 
+double VspSurf::FindRST( const vec3d & pt, const double &r0, const double &s0, const double &t0, double &r, double &s, double &t ) const
+{
+    surface_point_type p0;
+    p0 << pt.x(), pt.y(), pt.z();
+    surface_index_type ret;
+    double dist = eli::geom::intersect::find_rst( r, s, t, m_Surface, p0, r0, s0, t0, ret );
+    return dist;
+}
+
+double VspSurf::FindRST( const vec3d & pt, double &r, double &s, double &t ) const
+{
+    surface_point_type p0;
+    p0 << pt.x(), pt.y(), pt.z();
+    surface_index_type ret;
+    double dist = eli::geom::intersect::find_rst( r, s, t, m_Surface, p0, ret );
+    return dist;
+}
+
+void VspSurf::FindRST( const vector < vec3d > & pt, vector < double > &r, vector < double > &s, vector < double > &t, vector < double > &d  ) const
+{
+    int n = pt.size();
+    vector <surface_point_type> pts( n );
+    vector <surface_index_type> ret(n);
+
+    for ( int i = 0; i < n; i++ )
+    {
+        pts[i] << pt[i].x(), pt[i].y(), pt[i].z();
+    }
+    eli::geom::intersect::find_rst( r, s, t, d, m_Surface, pts, ret );
+}
+
+void VspSurf::ConvertRSTtoLMN( const double &r, const double &s, const double &t, double &l, double &m, double &n ) const
+{
+    m_Surface.ConvertRSTtoLMN( r, s, t, l, m, n );
+}
+
+void VspSurf::ConvertLMNtoRST( const double &l, const double &m, const double &n, double &r, double &s, double &t ) const
+{
+    m_Surface.ConvertLMNtoRST( l, m, n, r, s, t );
+}
+
 double VspSurf::ProjectPt( const vec3d &inpt, const int &idir, double &u_out, double &w_out, vec3d &outpt ) const
 {
     surface_point_type p, p0;
@@ -326,6 +374,14 @@ double VspSurf::ProjectPt01( const vec3d &inpt, const int &idir, const double &u
     w_out = w_out / GetWMax();
 
     return idist;
+}
+
+bool VspSurf::IsInside( const vec3d &pt )
+{
+    surface_point_type p;
+    p << pt.x(), pt.y(), pt.z();
+
+    return eli::geom::intersect::inside( m_Surface, p );
 }
 
 void VspSurf::GetUConstCurve( VspCurve &c, const double &u ) const
@@ -845,6 +901,42 @@ vec3d VspSurf::CompTanW( double u, double v ) const
 {
     vec3d rtn;
     surface_point_type p( m_Surface.f_v( u, v ) );
+
+    rtn.set_xyz( p.x(), p.y(), p.z() );
+    return rtn;
+}
+
+vec3d VspSurf::CompPntRST( double r, double s, double t ) const
+{
+    vec3d rtn;
+    surface_point_type p( m_Surface.fRST( r, s, t ) );
+
+    rtn.set_xyz( p.x(), p.y(), p.z() );
+    return rtn;
+}
+
+vec3d VspSurf::CompTanR( double r, double s, double t ) const
+{
+    vec3d rtn;
+    surface_point_type p( m_Surface.f_R( r, s, t ) );
+
+    rtn.set_xyz( p.x(), p.y(), p.z() );
+    return rtn;
+}
+
+vec3d VspSurf::CompTanS( double r, double s, double t ) const
+{
+    vec3d rtn;
+    surface_point_type p( m_Surface.f_S( r, s, t ) );
+
+    rtn.set_xyz( p.x(), p.y(), p.z() );
+    return rtn;
+}
+
+vec3d VspSurf::CompTanT( double r, double s, double t ) const
+{
+    vec3d rtn;
+    surface_point_type p( m_Surface.f_T( r, s, t ) );
 
     rtn.set_xyz( p.x(), p.y(), p.z() );
     return rtn;
@@ -2026,7 +2118,7 @@ bool VspSurf::CheckValidPatch( const piecewise_surface_type &surf )
     return true;
 }
 
-void VspSurf::FetchXFerSurf( const std::string &geom_id, int surf_ind, int comp_ind, vector< XferSurf > &xfersurfs, const vector < double > &usuppress, const vector < double > &wsuppress ) const
+void VspSurf::FetchXFerSurf( const std::string &geom_id, int surf_ind, int comp_ind, int part_surf_num, vector< XferSurf > &xfersurfs, const vector < double > &usuppress, const vector < double > &wsuppress ) const
 {
     vector < piecewise_surface_type > surfvec;
     surfvec.push_back( m_Surface );
@@ -2051,7 +2143,10 @@ void VspSurf::FetchXFerSurf( const std::string &geom_id, int surf_ind, int comp_
         xsurf.m_SurfIndx = surf_ind;
         xsurf.m_SurfType = GetSurfType();
         xsurf.m_SurfCfdType = m_SurfCfdType;
+        xsurf.m_FeaOrientationType = m_FeaOrientationType;
+        xsurf.m_FeaOrientation = m_FeaOrientation;
         xsurf.m_CompIndx = comp_ind;
+        xsurf.m_FeaPartSurfNum = part_surf_num;
         xfersurfs.push_back( xsurf );
     }
 }
@@ -2215,21 +2310,32 @@ void VspSurf::ScaleZ( double s )
     m_Surface.scale_z( s );
 }
 
-void VspSurf::MakePlaneSurf( const vec3d &ptA, const vec3d &ptB, const vec3d &ptC, const vec3d &ptD )
+void VspSurf::MakePlaneSurf( const vec3d &ptA, const vec3d &ptB, const vec3d &ptC, const vec3d &ptD, double expand )
 {
     // This function is used to construct a plane, using the four inputs as corner points
     // If the inputs are not truly planar, the function will work, but the surface will be 
     // constructed via bi-linear interpolation
+
+    vec3d cen = 0.25 * ( ptA + ptB + ptC + ptD );
+    vec3d uA = ptA - cen;
+    vec3d uB = ptB - cen;
+    vec3d uC = ptC - cen;
+    vec3d uD = ptD - cen;
+
+    vec3d pA = cen + expand * uA;
+    vec3d pB = cen + expand * uB;
+    vec3d pC = cen + expand * uC;
+    vec3d pD = cen + expand * uD;
 
     surface_patch_type patch;
     patch.resize( 1, 1 );
 
     threed_point_type pt0, pt1, pt2, pt3;
 
-    ptA.get_pnt( pt0 );
-    ptB.get_pnt( pt1 );
-    ptC.get_pnt( pt2 );
-    ptD.get_pnt( pt3 );
+    pA.get_pnt( pt0 );
+    pB.get_pnt( pt1 );
+    pC.get_pnt( pt2 );
+    pD.get_pnt( pt3 );
 
     patch.set_control_point( pt0, 0, 0 );
     patch.set_control_point( pt1, 1, 0 );

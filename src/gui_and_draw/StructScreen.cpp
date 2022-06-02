@@ -26,7 +26,7 @@ using namespace vsp;
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-StructScreen::StructScreen( ScreenMgr* mgr ) : TabScreen( mgr, 430, 650, "FEA Mesh", 155 )
+StructScreen::StructScreen( ScreenMgr* mgr ) : TabScreen( mgr, 430, 650 + 30, "FEA Mesh", 155 )
 {
     m_FLTK_Window->callback( staticCloseCB, this );
 
@@ -64,6 +64,7 @@ StructScreen::StructScreen( ScreenMgr* mgr ) : TabScreen( mgr, 430, 650, "FEA Me
     m_ConsoleDisplay = m_BorderConsoleLayout.AddFlTextDisplay( 100 );
     m_ConsoleBuffer = new Fl_Text_Buffer;
     m_ConsoleDisplay->buffer( m_ConsoleBuffer );
+    m_FLTK_Window->resizable( m_ConsoleDisplay );
 
     m_BorderConsoleLayout.AddYGap();
 
@@ -260,33 +261,6 @@ StructScreen::StructScreen( ScreenMgr* mgr ) : TabScreen( mgr, 430, 650, "FEA Me
     m_PartGroup.SetSameLineFlag( true );
     m_PartGroup.SetFitWidthFlag( false );
 
-    m_PartGroup.SetButtonWidth( m_PartTabLayout.GetRemainX() / 3 );
-    m_PartGroup.AddButton( m_ShellToggle, "Shell" );
-    m_PartGroup.AddButton( m_CapToggle, "Cap" );
-    m_PartGroup.AddButton( m_ShellCapToggle, "Shell and Cap" );
-
-    m_ShellCapToggleGroup.Init( this );
-    m_ShellCapToggleGroup.AddButton( m_ShellToggle.GetFlButton() );
-    m_ShellCapToggleGroup.AddButton( m_CapToggle.GetFlButton() );
-    m_ShellCapToggleGroup.AddButton( m_ShellCapToggle.GetFlButton() );
-
-    m_PartGroup.SetSameLineFlag( false );
-    m_PartGroup.SetFitWidthFlag( true );
-
-    m_PartGroup.ForceNewLine();
-    m_PartGroup.AddYGap();
-
-    m_PartGroup.SetSliderWidth( m_PartGroup.GetRemainX() / 2 );
-    m_PartGroup.SetChoiceButtonWidth( m_PartGroup.GetRemainX() / 2 );
-
-    m_PartGroup.AddChoice( m_GenPropertyChoice, "Property" );
-    m_PartGroup.AddChoice( m_GenCapPropertyChoice, "Cap Property" );
-
-    m_PartGroup.AddYGap();
-
-    m_PartGroup.SetSameLineFlag( true );
-    m_PartGroup.SetFitWidthFlag( false );
-
     m_PartGroup.SetButtonWidth( m_PartGroup.GetRemainX() / 2 );
 
     m_PartGroup.AddButton( m_ShowFeaPartButton, "Show" );
@@ -327,44 +301,102 @@ StructScreen::StructScreen( ScreenMgr* mgr ) : TabScreen( mgr, 430, 650, "FEA Me
 
     m_MaterialEditSubGroup.AddYGap();
 
+    m_MaterialEditSubGroup.AddChoice( m_FeaMaterialTypeChoice, "Type" );
+    m_FeaMaterialTypeChoice.AddItem( "Isotropic", vsp::FEA_ISOTROPIC );
+    m_FeaMaterialTypeChoice.AddItem( "Orthotropic", vsp::FEA_ENG_ORTHO );
+    m_FeaMaterialTypeChoice.UpdateItems();
+
+    m_MaterialEditSubGroup.AddYGap();
+
     m_MaterialEditSubGroup.AddDividerBox( "Material Properties" );
 
+    m_MaterialEditSubGroup.SetInputWidth( m_MaterialEditSubGroup.GetW() / 6.0 );
+    int button3_w = m_MaterialEditSubGroup.GetW() / 3.0 - m_MaterialEditSubGroup.GetInputWidth();
+    m_MaterialEditSubGroup.SetButtonWidth( button3_w );
+    int unit_w = button3_w;
+
     m_MaterialEditSubGroup.SetSameLineFlag( true );
+
+    char rho[16];
+    int indx = 0;
+    indx += fl_utf8encode( 961, &rho[ indx ] ); // Greek character rho
+    rho[ indx ] = 0;
+
+    m_MaterialEditSubGroup.SetFitWidthFlag( true );
+    m_MaterialEditSubGroup.AddSlider( m_MatDensitySlider, rho, 1e3, "%5.3g", unit_w );
     m_MaterialEditSubGroup.SetFitWidthFlag( false );
-
-    m_MaterialEditSubGroup.SetButtonWidth( m_MaterialEditSubGroup.GetRemainX() / 3 );
-    m_MaterialEditSubGroup.SetSliderWidth( 6 * m_MaterialEditSubGroup.GetW() / 24 );
-    m_MaterialEditSubGroup.SetInputWidth( m_MaterialEditSubGroup.GetW() / 6 );
-
-    m_MaterialEditSubGroup.AddSlider( m_MatDensitySlider, "Mass Density", 1e3, "%5.3g" );
-    m_MaterialEditSubGroup.SetButtonWidth( m_MaterialEditSubGroup.GetRemainX() );
+    m_MaterialEditSubGroup.SetButtonWidth( unit_w );
     m_MaterialEditSubGroup.AddButton( m_MatDensityUnit, "" );
     m_MatDensityUnit.GetFlButton()->box( FL_THIN_UP_BOX );
     m_MatDensityUnit.GetFlButton()->labelcolor( FL_BLACK );
 
+    m_MaterialEditSubGroup.AddYGap();
     m_MaterialEditSubGroup.ForceNewLine();
-    m_MaterialEditSubGroup.SetButtonWidth( m_MaterialEditSubGroup.GetRemainX() / 3 );
-    m_MaterialEditSubGroup.SetSliderWidth( 6 * m_MaterialEditSubGroup.GetW() / 24 );
+    m_MaterialEditSubGroup.SetButtonWidth( button3_w );
 
-    m_MaterialEditSubGroup.AddSlider( m_MatElasticModSlider, "Elastic Modulus", 1e4, "%5.3g" );
-    m_MaterialEditSubGroup.SetButtonWidth( m_MaterialEditSubGroup.GetRemainX() );
+    m_MaterialEditSubGroup.SetFitWidthFlag( true );
+    m_MaterialEditSubGroup.AddSlider( m_MatElasticModSlider, "E", 1e4, "%5.3g", unit_w );
+    m_MaterialEditSubGroup.SetFitWidthFlag( false );
+    m_MaterialEditSubGroup.SetButtonWidth( unit_w );
     m_MaterialEditSubGroup.AddButton( m_MatElasticModUnit, "" );
     m_MatElasticModUnit.GetFlButton()->box( FL_THIN_UP_BOX );
     m_MatElasticModUnit.GetFlButton()->labelcolor( FL_BLACK );
 
     m_MaterialEditSubGroup.ForceNewLine();
-    m_MaterialEditSubGroup.SetButtonWidth( m_MaterialEditSubGroup.GetRemainX() / 3 );
-    m_MaterialEditSubGroup.SetSliderWidth( 6 * m_MaterialEditSubGroup.GetW() / 24 );
+    m_MaterialEditSubGroup.SetButtonWidth( button3_w );
 
-    m_MaterialEditSubGroup.AddSlider( m_MatPoissonSlider, "Poisson Ratio", 1, "%5.3g" );
+    m_MaterialEditSubGroup.AddInput( m_MatE1Input, "E_1", "%5.3g" );
+    m_MaterialEditSubGroup.AddInput( m_MatE2Input, "E_2", "%5.3g" );
+    m_MaterialEditSubGroup.AddInput( m_MatE3Input, "E_3", "%5.3g" );
+
+    m_MaterialEditSubGroup.AddYGap();
+    m_MaterialEditSubGroup.ForceNewLine();
+
+    m_MaterialEditSubGroup.SetFitWidthFlag( true );
+    m_MaterialEditSubGroup.AddSlider( m_MatPoissonSlider, "nu", 1, "%5.3g" ); // unit_w // Reserve unit space
+    m_MaterialEditSubGroup.SetFitWidthFlag( false );
 
     m_MaterialEditSubGroup.ForceNewLine();
 
-    m_MaterialEditSubGroup.AddSlider( m_MatThermalExCoeffSlider, "Thermal Expan Coeff", 10e-5, "%5.3g" );
-    m_MaterialEditSubGroup.SetButtonWidth( m_MaterialEditSubGroup.GetRemainX() );
+    m_MaterialEditSubGroup.AddInput( m_Matnu12Input, "nu_12", "%5.3g", 2.0 * m_MaterialEditSubGroup.GetW() / 3.0 );
+    m_MaterialEditSubGroup.AddInput( m_Matnu13Input, "nu_13", "%5.3g", 2.0 * m_MaterialEditSubGroup.GetW() / 3.0 );
+    m_MaterialEditSubGroup.AddInput( m_Matnu23Input, "nu_23", "%5.3g", 2.0 * m_MaterialEditSubGroup.GetW() / 3.0 );
+
+    m_MaterialEditSubGroup.AddYGap();
+    m_MaterialEditSubGroup.ForceNewLine();
+
+    m_MaterialEditSubGroup.SetFitWidthFlag( true );
+    m_MaterialEditSubGroup.AddOutput( m_MatShearModOutput, "G", unit_w );
+    m_MaterialEditSubGroup.SetFitWidthFlag( false );
+    m_MaterialEditSubGroup.SetButtonWidth( unit_w );
+    m_MaterialEditSubGroup.AddButton( m_MatShearModUnit, "" );
+    m_MatShearModUnit.GetFlButton()->box( FL_THIN_UP_BOX );
+    m_MatShearModUnit.GetFlButton()->labelcolor( FL_BLACK );
+
+    m_MaterialEditSubGroup.ForceNewLine();
+    m_MaterialEditSubGroup.SetButtonWidth( button3_w );
+
+    m_MaterialEditSubGroup.AddInput( m_MatG12Input, "G_12", "%5.3g" );
+    m_MaterialEditSubGroup.AddInput( m_MatG13Input, "G_13", "%5.3g" );
+    m_MaterialEditSubGroup.AddInput( m_MatG23Input, "G_23", "%5.3g" );
+
+    m_MaterialEditSubGroup.AddYGap();
+    m_MaterialEditSubGroup.ForceNewLine();
+
+    m_MaterialEditSubGroup.SetFitWidthFlag( true );
+    m_MaterialEditSubGroup.AddSlider( m_MatThermalExCoeffSlider, "CTE", 10e-5, "%5.3g", unit_w );
+    m_MaterialEditSubGroup.SetFitWidthFlag( false );
+    m_MaterialEditSubGroup.SetButtonWidth( unit_w );
     m_MaterialEditSubGroup.AddButton( m_MatThermalExCoeffUnit, "" );
     m_MatThermalExCoeffUnit.GetFlButton()->box( FL_THIN_UP_BOX );
     m_MatThermalExCoeffUnit.GetFlButton()->labelcolor( FL_BLACK );
+
+    m_MaterialEditSubGroup.ForceNewLine();
+    m_MaterialEditSubGroup.SetButtonWidth( button3_w );
+
+    m_MaterialEditSubGroup.AddInput( m_MatA1Input, "CTE_1", "%5.3g" );
+    m_MaterialEditSubGroup.AddInput( m_MatA2Input, "CTE_2", "%5.3g" );
+    m_MaterialEditSubGroup.AddInput( m_MatA3Input, "CTE_3", "%5.3g" );
 
     //=== Property Tab ===//
     m_PropertyTabLayout.SetGroupAndScreen( propTabGroup, this );
@@ -720,6 +752,13 @@ StructScreen::StructScreen( ScreenMgr* mgr ) : TabScreen( mgr, 430, 650, "FEA Me
     m_MeshTabLayout.AddButton( m_ToCubicToggle, "Demote Surfs to Cubic" );
     m_MeshTabLayout.AddSlider( m_ToCubicTolSlider, "Cubic Tolerance", 10, "%5.4g", 0, true );
 
+    m_MeshTabLayout.AddYGap();
+    m_MeshTabLayout.AddDividerBox( "FEA Index Offsets" );
+    m_MeshTabLayout.AddYGap();
+
+    m_MeshTabLayout.AddSlider( m_NodeOffset, "Node Offset", 1e5, " %5.0f" );
+    m_MeshTabLayout.AddSlider( m_ElementOffset, "Element Offset", 1e5, " %5.0f" );
+
     m_OutputTabLayout.SetGroupAndScreen( outputTabGroup, this );
     // TODO: Add more CFD Mesh Export file options?
 
@@ -845,7 +884,7 @@ StructScreen::StructScreen( ScreenMgr* mgr ) : TabScreen( mgr, 430, 650, "FEA Me
     m_LabelDelimChoice.AddItem( "Underscore" );
     m_LabelDelimChoice.AddItem( "Space" );
     m_LabelDelimChoice.AddItem( "None" );
-    m_OutputTabLayout.AddChoice( m_LabelDelimChoice, "Delimeter" );
+    m_OutputTabLayout.AddChoice( m_LabelDelimChoice, "Delimiter" );
 
     m_LenUnitChoice.AddItem( "MM" );
     m_LenUnitChoice.AddItem( "CM" );
@@ -1278,45 +1317,51 @@ void StructScreen::UpdateFeaPartChoice()
 
                 if ( currgeom )
                 {
-                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_SLICE ) );
-                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_RIB ) );
-                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_SPAR ) );
-                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_FIX_POINT ) );
-                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_DOME ) );
-                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_RIB_ARRAY ) );
-                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_SLICE_ARRAY ) );
+                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_SLICE ), vsp::FEA_SLICE );
+                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_RIB ), vsp::FEA_RIB );
+                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_SPAR ), vsp::FEA_SPAR );
+                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_FIX_POINT ), vsp::FEA_FIX_POINT );
+                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_DOME ), vsp::FEA_DOME );
+                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_RIB_ARRAY ), vsp::FEA_RIB_ARRAY );
+                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_SLICE_ARRAY ), vsp::FEA_SLICE_ARRAY );
+                    m_FeaPartChoice.AddItem( FeaPart::GetTypeName( vsp::FEA_TRIM ), vsp::FEA_TRIM );
 
-                    m_FeaPartChoice.AddItem( SubSurface::GetTypeName( vsp::SS_LINE ) );
-                    m_FeaPartChoice.AddItem( SubSurface::GetTypeName( vsp::SS_RECTANGLE ) );
-                    m_FeaPartChoice.AddItem( SubSurface::GetTypeName( vsp::SS_ELLIPSE ) );
-                    m_FeaPartChoice.AddItem( SubSurface::GetTypeName( vsp::SS_CONTROL ) );
-                    m_FeaPartChoice.AddItem( SubSurface::GetTypeName( vsp::SS_LINE_ARRAY ) );
+                    // Number of non-subsurface types.  Used as an offset when indexing m_FeaPartChoice, but needing
+                    // to index into subsurface part types.
+                    m_FeaPartChoiceSubSurfOffset = vsp::FEA_NUM_TYPES;
+
+                    m_FeaPartChoice.AddItem( SubSurface::GetTypeName( vsp::SS_LINE ), vsp::SS_LINE + m_FeaPartChoiceSubSurfOffset );
+                    m_FeaPartChoice.AddItem( SubSurface::GetTypeName( vsp::SS_RECTANGLE ), vsp::SS_RECTANGLE + m_FeaPartChoiceSubSurfOffset  );
+                    m_FeaPartChoice.AddItem( SubSurface::GetTypeName( vsp::SS_ELLIPSE ), vsp::SS_ELLIPSE + m_FeaPartChoiceSubSurfOffset  );
+                    m_FeaPartChoice.AddItem( SubSurface::GetTypeName( vsp::SS_CONTROL ), vsp::SS_CONTROL + m_FeaPartChoiceSubSurfOffset  );
+                    m_FeaPartChoice.AddItem( SubSurface::GetTypeName( vsp::SS_LINE_ARRAY ), vsp::SS_LINE_ARRAY + m_FeaPartChoiceSubSurfOffset  );
+                    m_FeaPartChoice.AddItem( SubSurface::GetTypeName( vsp::SS_FINITE_LINE ), vsp::SS_FINITE_LINE + m_FeaPartChoiceSubSurfOffset  );
 
                     if ( currgeom->GetType().m_Type == MS_WING_GEOM_TYPE )
                     {
-                        m_FeaPartChoice.SetFlag( 1, 0 ); // FEA_RIB
-                        m_FeaPartChoice.SetFlag( 2, 0 ); // FEA_SPAR
-                        m_FeaPartChoice.SetFlag( 5, 0 ); // FEA_RIB_ARRAY
-                        m_FeaPartChoice.SetFlag( 10, 0 ); // SS_CONTROL
+                        m_FeaPartChoice.SetFlagByVal( vsp::FEA_RIB, 0 ); // FEA_RIB
+                        m_FeaPartChoice.SetFlagByVal( vsp::FEA_SPAR, 0 ); // FEA_SPAR
+                        m_FeaPartChoice.SetFlagByVal( vsp::FEA_RIB_ARRAY, 0 ); // FEA_RIB_ARRAY
+                        m_FeaPartChoice.SetFlagByVal( vsp::SS_CONTROL + m_FeaPartChoiceSubSurfOffset, 0 ); // SS_CONTROL
                     }
                     else
                     {
-                        m_FeaPartChoice.SetFlag( 1, FL_MENU_INACTIVE );
-                        m_FeaPartChoice.SetFlag( 2, FL_MENU_INACTIVE );
-                        m_FeaPartChoice.SetFlag( 5, FL_MENU_INACTIVE );
-                        m_FeaPartChoice.SetFlag( 10, FL_MENU_INACTIVE );
+                        m_FeaPartChoice.SetFlagByVal( vsp::FEA_RIB, FL_MENU_INACTIVE );
+                        m_FeaPartChoice.SetFlagByVal( vsp::FEA_SPAR, FL_MENU_INACTIVE );
+                        m_FeaPartChoice.SetFlagByVal( vsp::FEA_RIB_ARRAY, FL_MENU_INACTIVE );
+                        m_FeaPartChoice.SetFlagByVal( vsp::SS_CONTROL + m_FeaPartChoiceSubSurfOffset, FL_MENU_INACTIVE );
                     }
 
                     if ( currgeom->GetType().m_Type == FUSELAGE_GEOM_TYPE || currgeom->GetType().m_Type == POD_GEOM_TYPE || currgeom->GetType().m_Type == STACK_GEOM_TYPE ) //TODO: Improve
                     {
-                        m_FeaPartChoice.SetFlag( 4, 0 ); // FEA_DOME
+                        m_FeaPartChoice.SetFlagByVal( vsp::FEA_DOME, 0 ); // FEA_DOME
                     }
                     else
                     {
-                        m_FeaPartChoice.SetFlag( 4, FL_MENU_INACTIVE );
+                        m_FeaPartChoice.SetFlagByVal( vsp::FEA_DOME, FL_MENU_INACTIVE );
                     }
 
-                    m_NumFeaPartChoices = 7;
+
 
                     m_FeaPartChoice.UpdateItems();
 
@@ -1378,146 +1423,6 @@ void StructScreen::UpdateFeaPropertyBrowser()
     m_FeaPropertySelectBrowser->hposition( h_pos );
 }
 
-void StructScreen::UpdateFeaPropertyChoice()
-{
-    //==== Property Choice ====//
-    m_GenPropertyChoice.ClearItems();
-    m_GenCapPropertyChoice.ClearItems();
-
-    Vehicle*  veh = m_ScreenMgr->GetVehiclePtr();
-
-    if ( veh )
-    {
-        vector< FeaProperty* > property_vec = StructureMgr.GetFeaPropertyVec();
-
-        for ( int i = 0; i < property_vec.size(); ++i )
-        {
-            m_GenPropertyChoice.AddItem( string( property_vec[i]->GetName() ) );
-            m_GenCapPropertyChoice.AddItem( string( property_vec[i]->GetName() ) );
-
-            if ( property_vec[i]->m_FeaPropertyType() == vsp::FEA_SHELL )
-            {
-                m_GenPropertyChoice.SetFlag( i, 0 );
-                m_GenCapPropertyChoice.SetFlag( i, FL_MENU_INACTIVE );
-            }
-            else if ( property_vec[i]->m_FeaPropertyType() == vsp::FEA_BEAM )
-            {
-                m_GenPropertyChoice.SetFlag( i, FL_MENU_INACTIVE );
-                m_GenCapPropertyChoice.SetFlag( i, 0 );
-            }
-        }
-
-        m_GenPropertyChoice.UpdateItems();
-        m_GenCapPropertyChoice.UpdateItems();
-
-        if ( StructureMgr.ValidTotalFeaStructInd( StructureMgr.GetCurrStructIndex() ) )
-        {
-            vector < FeaStructure* > structvec = StructureMgr.GetAllFeaStructs();
-
-            if ( m_SelectedPartIndexVec.size() == 1 )
-            {
-                if ( m_SelectedPartIndexVec[0] < structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() )
-                {
-                    FeaPart* feaprt = structvec[StructureMgr.GetCurrStructIndex()]->GetFeaPart( m_SelectedPartIndexVec[0] );
-
-                    if ( feaprt )
-                    {
-                        m_GenPropertyChoice.SetVal( feaprt->m_FeaPropertyIndex() );
-                        m_GenCapPropertyChoice.SetVal( feaprt->m_CapFeaPropertyIndex() );
-                    }
-                }
-                else if ( m_SelectedPartIndexVec[0] >= structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() )
-                {
-                    SubSurface* subsurf = structvec[StructureMgr.GetCurrStructIndex()]->GetFeaSubSurf( m_SelectedPartIndexVec[0] - structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() );
-
-                    if ( subsurf )
-                    {
-                        m_GenPropertyChoice.SetVal( subsurf->m_FeaPropertyIndex() );
-                        m_GenCapPropertyChoice.SetVal( subsurf->m_CapFeaPropertyIndex() );
-                    }
-                }
-            }
-            else if ( m_SelectedPartIndexVec.size() > 1 )
-            {
-                int prop_index = -1;
-                int cap_index = -1;
-                bool mult_prop = false;
-                bool mult_cap_prop = false;
-
-                for ( size_t i = 0; i < m_SelectedPartIndexVec.size(); i++ )
-                {
-                    if ( m_SelectedPartIndexVec[i] < structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() )
-                    {
-                        FeaPart* feaprt = structvec[StructureMgr.GetCurrStructIndex()]->GetFeaPart( m_SelectedPartIndexVec[i] );
-
-                        if ( feaprt )
-                        {
-                            if ( i == 0 )
-                            {
-                                prop_index = feaprt->m_FeaPropertyIndex();
-                                cap_index = feaprt->m_CapFeaPropertyIndex();
-                            }
-
-                            if ( feaprt->m_FeaPropertyIndex() != prop_index )
-                            {
-                                mult_prop = true;
-                            }
-                            if ( feaprt->m_CapFeaPropertyIndex() != cap_index )
-                            {
-                                mult_cap_prop = true;
-                            }
-                        }
-                    }
-                    else if ( m_SelectedPartIndexVec[i] >= structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() )
-                    {
-                        SubSurface* subsurf = structvec[StructureMgr.GetCurrStructIndex()]->GetFeaSubSurf( m_SelectedPartIndexVec[i] - structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() );
-
-                        if ( subsurf )
-                        {
-                            if ( i == 0 )
-                            {
-                                prop_index = subsurf->m_FeaPropertyIndex();
-                                cap_index = subsurf->m_CapFeaPropertyIndex();
-                            }
-
-                            if ( subsurf->m_FeaPropertyIndex() != prop_index )
-                            {
-                                mult_prop = true;
-                            }
-                            if ( subsurf->m_CapFeaPropertyIndex() != cap_index )
-                            {
-                                mult_cap_prop = true;
-                            }
-                        }
-                    }
-                }
-
-                if ( mult_prop )
-                {
-                    m_GenPropertyChoice.AddItem( "Multiple" );
-                    m_GenPropertyChoice.UpdateItems();
-                    m_GenPropertyChoice.SetVal( m_GenPropertyChoice.GetItems().size() - 1 );
-                }
-                else
-                {
-                    m_GenPropertyChoice.SetVal( prop_index );
-                }
-
-                if ( mult_cap_prop )
-                {
-                    m_GenCapPropertyChoice.AddItem( "Multiple" );
-                    m_GenCapPropertyChoice.UpdateItems();
-                    m_GenCapPropertyChoice.SetVal( m_GenCapPropertyChoice.GetItems().size() - 1 );
-                }
-                else
-                {
-                    m_GenCapPropertyChoice.SetVal( cap_index );
-                }
-            }
-        }
-    }
-}
-
 void StructScreen::UpdateFeaMaterialBrowser()
 {
     //==== FeaMaterial Browser ====//
@@ -1529,6 +1434,8 @@ void StructScreen::UpdateFeaMaterialBrowser()
     for ( int i = 0; i < (int)material_vec.size(); i++ )
     {
         string mat_name = material_vec[i]->GetName();
+        fltk_unicode_subscripts( mat_name );
+        fltk_unicode_plusminus( mat_name );
         m_FeaMaterialSelectBrowser->add( mat_name.c_str() );
     }
 
@@ -1559,8 +1466,16 @@ void StructScreen::UpdateFeaMaterialChoice()
 
         for ( int i = 0; i < material_vec.size(); ++i )
         {
-            m_FeaShellMaterialChoice.AddItem( string( material_vec[i]->GetName() ) );
-            m_FeaBeamMaterialChoice.AddItem( string( material_vec[i]->GetName() ) );
+            string mat_name = material_vec[i]->GetName();
+            fltk_unicode_subscripts( mat_name );
+            fltk_unicode_plusminus( mat_name );
+
+            m_FeaShellMaterialChoice.AddItem( mat_name, i );
+
+            if ( material_vec[i]->m_FeaMaterialType() == vsp::FEA_ISOTROPIC )
+            {
+                m_FeaBeamMaterialChoice.AddItem( mat_name, i );
+            }
         }
         m_FeaShellMaterialChoice.UpdateItems();
         m_FeaBeamMaterialChoice.UpdateItems();
@@ -1633,92 +1548,6 @@ void StructScreen::FeaPropertyDispGroup( GroupLayout* group )
     {
         group->Show();
         m_FeaPropertyCommonGroup.Show(); // Always show the Common Group if any other subsurface group is being displayed.
-    }
-}
-
-void StructScreen::UpdateGenPropertyIndex( Choice* property_choice )
-{
-    FeaProperty* prop = StructureMgr.GetFeaProperty( property_choice->GetVal() );
-
-    if ( prop->m_FeaPropertyType() != vsp::FEA_SHELL || !StructureMgr.ValidFeaPropertyInd( property_choice->GetVal() ) )
-    {
-        return;
-    }
-
-    if ( StructureMgr.ValidTotalFeaStructInd( StructureMgr.GetCurrStructIndex() ) )
-    {
-        vector < FeaStructure* > structvec = StructureMgr.GetAllFeaStructs();
-
-        for ( size_t i = 0; i < m_SelectedPartIndexVec.size(); i++ )
-        {
-            if ( m_SelectedPartIndexVec[i] < structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() )
-            {
-                FeaPart* feaprt = structvec[StructureMgr.GetCurrStructIndex()]->GetFeaPart( m_SelectedPartIndexVec[i] );
-
-                if ( feaprt )
-                {
-                    if ( ( feaprt->m_IncludedElements() == vsp::FEA_SHELL || feaprt->m_IncludedElements() == vsp::FEA_SHELL_AND_BEAM ) && feaprt->GetType() != vsp::FEA_FIX_POINT )
-                    {
-                        feaprt->m_FeaPropertyIndex.Set( property_choice->GetVal() );
-                    }
-                }
-            }
-            else if ( m_SelectedPartIndexVec[i] >= structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() )
-            {
-                SubSurface* subsurf = structvec[StructureMgr.GetCurrStructIndex()]->GetFeaSubSurf( m_SelectedPartIndexVec[i] - structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() );
-
-                if ( subsurf )
-                {
-                    if ( subsurf->m_IncludedElements() == vsp::FEA_SHELL || subsurf->m_IncludedElements() == vsp::FEA_SHELL_AND_BEAM )
-                    {
-                        subsurf->m_FeaPropertyIndex.Set( property_choice->GetVal() );
-                    }
-                }
-            }
-        }
-    }
-}
-
-void StructScreen::UpdateGenCapPropertyIndex( Choice* property_choice )
-{
-    FeaProperty* prop = StructureMgr.GetFeaProperty( property_choice->GetVal() );
-
-    if ( prop->m_FeaPropertyType() != vsp::FEA_BEAM || !StructureMgr.ValidFeaPropertyInd( property_choice->GetVal() ) )
-    {
-        return;
-    }
-
-    if ( StructureMgr.ValidTotalFeaStructInd( StructureMgr.GetCurrStructIndex() ) )
-    {
-        vector < FeaStructure* > structvec = StructureMgr.GetAllFeaStructs();
-
-        for ( size_t i = 0; i < m_SelectedPartIndexVec.size(); i++ )
-        {
-            if ( m_SelectedPartIndexVec[i] < structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() )
-            {
-                FeaPart* feaprt = structvec[StructureMgr.GetCurrStructIndex()]->GetFeaPart( m_SelectedPartIndexVec[i] );
-
-                if ( feaprt )
-                {
-                    if ( ( feaprt->m_IncludedElements() == vsp::FEA_BEAM || feaprt->m_IncludedElements() == vsp::FEA_SHELL_AND_BEAM ) && feaprt->GetType() != vsp::FEA_FIX_POINT )
-                    {
-                        feaprt->m_CapFeaPropertyIndex.Set( property_choice->GetVal() );
-                    }
-                }
-            }
-            else if ( m_SelectedPartIndexVec[i] >= structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() )
-            {
-                SubSurface* subsurf = structvec[StructureMgr.GetCurrStructIndex()]->GetFeaSubSurf( m_SelectedPartIndexVec[i] - structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() );
-
-                if ( subsurf )
-                {
-                    if ( subsurf->m_IncludedElements() == vsp::FEA_BEAM || subsurf->m_IncludedElements() == vsp::FEA_SHELL_AND_BEAM )
-                    {
-                        subsurf->m_CapFeaPropertyIndex.Set( property_choice->GetVal() );
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -1832,6 +1661,7 @@ void StructScreen::UpdateUnitLabels()
         m_MatDensityUnit.GetFlButton()->copy_label( density_unit.c_str() );
         m_MatElasticModUnit.GetFlButton()->copy_label( young_mod_unit.c_str() );
         m_MatThermalExCoeffUnit.GetFlButton()->copy_label( temp_unit.c_str() );
+        m_MatShearModUnit.GetFlButton()->copy_label( young_mod_unit.c_str() );
 
         m_PropThickUnit.GetFlButton()->copy_label( thick_unit.c_str() );
 
@@ -1896,7 +1726,6 @@ bool StructScreen::Update()
 
         //===== FeaProperty Update =====//
         UpdateFeaPropertyBrowser();
-        UpdateFeaPropertyChoice();
 
         if ( StructureMgr.ValidFeaPropertyInd( StructureMgr.GetCurrPropertyIndex() ) )
         {
@@ -1992,27 +1821,76 @@ bool StructScreen::Update()
             FeaMaterial* fea_mat = StructureMgr.GetFeaMaterialVec()[StructureMgr.GetCurrMaterialIndex()];
             if ( fea_mat )
             {
+                m_FeaMaterialTypeChoice.Update( fea_mat->m_FeaMaterialType.GetID() );
                 m_FeaMaterialNameInput.Update( fea_mat->GetName() );
                 m_MatDensitySlider.Update( fea_mat->m_MassDensity.GetID() );
                 m_MatElasticModSlider.Update( fea_mat->m_ElasticModulus.GetID() );
                 m_MatPoissonSlider.Update( fea_mat->m_PoissonRatio.GetID() );
+
+                char str[256];
+                sprintf( str, "%5.3g", fea_mat->GetShearModulus() );
+                m_MatShearModOutput.Update( str );
+
                 m_MatThermalExCoeffSlider.Update( fea_mat->m_ThermalExpanCoeff.GetID() );
+
+                m_MatE1Input.Update( fea_mat->m_E1.GetID() );
+                m_MatE2Input.Update( fea_mat->m_E2.GetID() );
+                m_MatE3Input.Update( fea_mat->m_E3.GetID() );
+                m_Matnu12Input.Update( fea_mat->m_nu12.GetID() );
+                m_Matnu13Input.Update( fea_mat->m_nu13.GetID() );
+                m_Matnu23Input.Update( fea_mat->m_nu23.GetID() );
+                m_MatG12Input.Update( fea_mat->m_G12.GetID() );
+                m_MatG13Input.Update( fea_mat->m_G13.GetID() );
+                m_MatG23Input.Update( fea_mat->m_G23.GetID() );
+                m_MatA1Input.Update( fea_mat->m_A1.GetID() );
+                m_MatA2Input.Update( fea_mat->m_A2.GetID() );
+                m_MatA3Input.Update( fea_mat->m_A3.GetID() );
+
+                m_FeaMaterialNameInput.Deactivate();
+                m_MatDensitySlider.Deactivate();
+                m_MatElasticModSlider.Deactivate();
+                m_MatPoissonSlider.Deactivate();
+                m_MatShearModOutput.Deactivate();
+                m_MatThermalExCoeffSlider.Deactivate();
+                m_MatE1Input.Deactivate();
+                m_MatE2Input.Deactivate();
+                m_MatE3Input.Deactivate();
+                m_Matnu12Input.Deactivate();
+                m_Matnu13Input.Deactivate();
+                m_Matnu23Input.Deactivate();
+                m_MatG12Input.Deactivate();
+                m_MatG13Input.Deactivate();
+                m_MatG23Input.Deactivate();
+                m_MatA1Input.Deactivate();
+                m_MatA2Input.Deactivate();
+                m_MatA3Input.Deactivate();
 
                 if ( fea_mat->m_UserFeaMaterial )
                 {
                     m_FeaMaterialNameInput.Activate();
                     m_MatDensitySlider.Activate();
-                    m_MatElasticModSlider.Activate();
-                    m_MatPoissonSlider.Activate();
-                    m_MatThermalExCoeffSlider.Activate();
-                }
-                else
-                {
-                    m_FeaMaterialNameInput.Deactivate();
-                    m_MatDensitySlider.Deactivate();
-                    m_MatElasticModSlider.Deactivate();
-                    m_MatPoissonSlider.Deactivate();
-                    m_MatThermalExCoeffSlider.Deactivate();
+                    if ( fea_mat->m_FeaMaterialType() == vsp::FEA_ISOTROPIC )
+                    {
+                        m_MatElasticModSlider.Activate();
+                        m_MatPoissonSlider.Activate();
+                        m_MatShearModOutput.Activate();
+                        m_MatThermalExCoeffSlider.Activate();
+                    }
+                    else
+                    {
+                        m_MatE1Input.Activate();
+                        m_MatE2Input.Activate();
+                        m_MatE3Input.Activate();
+                        m_Matnu12Input.Activate();
+                        m_Matnu13Input.Activate();
+                        m_Matnu23Input.Activate();
+                        m_MatG12Input.Activate();
+                        m_MatG13Input.Activate();
+                        m_MatG23Input.Activate();
+                        m_MatA1Input.Activate();
+                        m_MatA2Input.Activate();
+                        m_MatA3Input.Activate();
+                    }
                 }
             }
         }
@@ -2048,6 +1926,9 @@ bool StructScreen::Update()
             {
                 m_ToCubicTolSlider.Deactivate();
             }
+
+            m_NodeOffset.Update( curr_struct->GetStructSettingsPtr()->m_NodeOffset.GetID() );
+            m_ElementOffset.Update( curr_struct->GetStructSettingsPtr()->m_ElementOffset.GetID() );
 
             //===== Display Tab Toggle Update =====//
             m_DrawMeshButton.Update( curr_struct->GetStructSettingsPtr()->m_DrawMeshFlag.GetID() );
@@ -2181,12 +2062,9 @@ bool StructScreen::Update()
             if ( m_SelectedPartIndexVec.size() > 0 )
             {
                 FeaStructDispGroup( &m_PartGroup );
-                m_GenPropertyChoice.Activate();
-                m_GenCapPropertyChoice.Activate();
                 m_FeaPartNameInput.Deactivate();
                 m_EditFeaPartButton.Deactivate();
                 m_DispFeaPartGroup.Activate();
-                m_ShellCapToggleGroup.Activate();
             }
             else
             {
@@ -2205,44 +2083,15 @@ bool StructScreen::Update()
                     if ( prt )
                     {
                         m_FeaPartNameInput.Update( prt->GetName() );
-                        m_ShellCapToggleGroup.Update( prt->m_IncludedElements.GetID() );
                         m_DispFeaPartGroup.Update( prt->m_DrawFeaPartFlag.GetID() );
                         m_DispFeaPartGroup.Activate();
-                        m_ShellCapToggleGroup.Activate();
-
-                        if ( prt->m_IncludedElements() == vsp::FEA_SHELL )
-                        {
-                            m_GenPropertyChoice.Activate();
-                            m_GenCapPropertyChoice.Deactivate();
-                        }
-                        else if ( prt->m_IncludedElements() == vsp::FEA_BEAM )
-                        {
-                            m_GenPropertyChoice.Deactivate();
-                            m_GenCapPropertyChoice.Activate();
-                        }
 
                         if ( prt->GetType() == vsp::FEA_FIX_POINT )
                         {
-                            m_GenPropertyChoice.Deactivate();
-                            m_GenCapPropertyChoice.Deactivate();
-                            m_ShellCapToggleGroup.Deactivate();
                         }
                         else if ( prt->GetType() == vsp::FEA_SKIN )
                         {
                             m_DispFeaPartGroup.Deactivate();
-                            m_ShellCapToggleGroup.Deactivate();
-
-                            FeaSkin* skin = dynamic_cast<FeaSkin*>( prt );
-                            assert( skin );
-
-                            if ( skin->m_RemoveSkinFlag() )
-                            {
-                                m_GenPropertyChoice.Deactivate();
-                            }
-                            else
-                            {
-                                m_GenPropertyChoice.Activate();
-                            }
                         }
                     }
                     else
@@ -2257,28 +2106,7 @@ bool StructScreen::Update()
                     if ( subsurf )
                     {
                         m_FeaPartNameInput.Update( subsurf->GetName() );
-                        m_ShellCapToggleGroup.Update( subsurf->m_IncludedElements.GetID() );
                         m_DispFeaPartGroup.Update( subsurf->m_DrawFeaPartFlag.GetID() );
-
-                        if ( subsurf->m_IncludedElements() == vsp::FEA_SHELL )
-                        {
-                            m_GenPropertyChoice.Activate();
-                            m_GenCapPropertyChoice.Deactivate();
-                        }
-                        else if ( subsurf->m_IncludedElements() == vsp::FEA_BEAM )
-                        {
-                            m_GenPropertyChoice.Deactivate();
-                            m_GenCapPropertyChoice.Activate();
-                        }
-
-                        if ( subsurf->GetType() == vsp::SS_LINE_ARRAY )
-                        {
-                            m_ShellCapToggleGroup.Deactivate();
-                        }
-                        else
-                        {
-                            m_ShellCapToggleGroup.Activate();
-                        }
                     }
                     else
                     {
@@ -2291,27 +2119,11 @@ bool StructScreen::Update()
                 }
             }
 
-            // Update FeaParts and SubSurfaces if FeaMesh is not in progress
-            if ( !FeaMeshMgr.GetFeaMeshInProgress() )
-            {
-                // Only update if FeaPartEditScreen is not open, since the structure is updated there otherwise
-                VspScreen* edit_screen = m_ScreenMgr->GetScreen( ScreenMgr::VSP_FEA_PART_EDIT_SCREEN );
-                if ( edit_screen )
-                {
-                    if ( !edit_screen->IsShown() )
-                    {
-                        structVec[StructureMgr.GetCurrStructIndex()]->Update();
-                    }
-                }
-            }
         }
         else
         {
             m_CurrStructOutput.Update( "" );
         }
-
-        // Update Draw Objects for FeaParts
-        UpdateDrawObjs();
 
         if ( FeaMeshMgr.GetFeaMeshInProgress() )
         {
@@ -2349,9 +2161,11 @@ bool StructScreen::Update()
 
 void StructScreen::AddOutputText( const string &text )
 {
+    Fl::lock();
     m_ConsoleBuffer->append( text.c_str() );
     m_ConsoleDisplay->insert_position( m_ConsoleDisplay->buffer()->length() );
     m_ConsoleDisplay->show_insert_position();
+    Fl::unlock();
 }
 
 void StructScreen::CallBack( Fl_Widget* w )
@@ -2404,7 +2218,7 @@ void StructScreen::CallBack( Fl_Widget* w )
 
                         if ( subsurf )
                         {
-                            m_SelectedFeaPartChoice = subsurf->GetType() + m_NumFeaPartChoices;
+                            m_SelectedFeaPartChoice = subsurf->GetType() + m_FeaPartChoiceSubSurfOffset;
                         }
                     }
                 }
@@ -2690,79 +2504,38 @@ void StructScreen::GuiDeviceCallBack( GuiDevice* device )
 
             m_SelectedPartIndexVec.clear();
 
-            if ( m_FeaPartChoice.GetVal() < m_NumFeaPartChoices )
+            if ( m_FeaPartChoice.GetVal() < m_FeaPartChoiceSubSurfOffset )
             {
                 FeaPart* feaprt = NULL;
 
+                feaprt = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaPart( m_FeaPartChoice.GetVal() );
+
                 if ( m_FeaPartChoice.GetVal() == vsp::FEA_SLICE )
                 {
-                    feaprt = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaPart( vsp::FEA_SLICE );
-
                     FeaSlice* slice = dynamic_cast<FeaSlice*>( feaprt );
                     assert( slice );
 
                     slice->m_OrientationPlane.Set( StructureMgr.GetFeaSliceOrientIndex() );
-                }
-                else if ( m_FeaPartChoice.GetVal() == vsp::FEA_RIB )
-                {
-                    feaprt = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaPart( vsp::FEA_RIB );
-                }
-                else if ( m_FeaPartChoice.GetVal() == vsp::FEA_SPAR )
-                {
-                    feaprt = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaPart( vsp::FEA_SPAR );
-                }
-                else if ( m_FeaPartChoice.GetVal() == vsp::FEA_FIX_POINT )
-                {
-                    feaprt = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaPart( vsp::FEA_FIX_POINT );
-                }
-                else if ( m_FeaPartChoice.GetVal() == vsp::FEA_DOME )
-                {
-                    feaprt = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaPart( vsp::FEA_DOME );
-                }
-                else if ( m_FeaPartChoice.GetVal() == vsp::FEA_RIB_ARRAY )
-                {
-                    feaprt = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaPart( vsp::FEA_RIB_ARRAY );
-                }
-                else if ( m_FeaPartChoice.GetVal() == vsp::FEA_SLICE_ARRAY )
-                {
-                    feaprt = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaPart( vsp::FEA_SLICE_ARRAY );
                 }
 
                 if ( feaprt )
                 {
                     m_SelectedPartIndexVec.push_back( structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() - 1 );
                     StructureMgr.SetCurrPartIndex( structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() - 1 );
+                    feaprt->Update();
                 }
             }
             else
             {
                 SubSurface* ssurf = NULL;
 
-                if ( m_FeaPartChoice.GetVal() - m_NumFeaPartChoices == vsp::SS_LINE )
-                {
-                    ssurf = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaSubSurf( vsp::SS_LINE );
-                }
-                else if ( m_FeaPartChoice.GetVal() - m_NumFeaPartChoices == vsp::SS_RECTANGLE )
-                {
-                    ssurf = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaSubSurf( vsp::SS_RECTANGLE );
-                }
-                else if ( m_FeaPartChoice.GetVal() - m_NumFeaPartChoices == vsp::SS_ELLIPSE )
-                {
-                    ssurf = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaSubSurf( vsp::SS_ELLIPSE );
-                }
-                else if ( m_FeaPartChoice.GetVal() - m_NumFeaPartChoices == vsp::SS_CONTROL )
-                {
-                    ssurf = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaSubSurf( vsp::SS_CONTROL );
-                }
-                else if ( m_FeaPartChoice.GetVal() - m_NumFeaPartChoices == vsp::SS_LINE_ARRAY )
-                {
-                    ssurf = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaSubSurf( vsp::SS_LINE_ARRAY );
-                }
+                ssurf = structvec[StructureMgr.GetCurrStructIndex()]->AddFeaSubSurf( m_FeaPartChoice.GetVal() - m_FeaPartChoiceSubSurfOffset );
 
                 if ( ssurf )
                 {
                     m_SelectedPartIndexVec.push_back( structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() + structvec[StructureMgr.GetCurrStructIndex()]->NumFeaSubSurfs() - 1 );
                     StructureMgr.SetCurrPartIndex( structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() + structvec[StructureMgr.GetCurrStructIndex()]->NumFeaSubSurfs() - 1 );
+                    ssurf->Update();
                 }
             }
         }
@@ -2867,53 +2640,6 @@ void StructScreen::GuiDeviceCallBack( GuiDevice* device )
                     if ( ssurf )
                     {
                         ssurf->m_DrawFeaPartFlag.Set( curr_val );
-                    }
-                }
-            }
-        }
-    }
-    else if ( device == &m_ShellCapToggleGroup )
-    {
-        string curr_parm_id = m_ShellCapToggleGroup.GetParmID();
-        Parm* curr_parm = ParmMgr.FindParm( curr_parm_id );
-        double curr_val = curr_parm->Get();
-
-        if ( StructureMgr.ValidTotalFeaStructInd( StructureMgr.GetCurrStructIndex() ) && m_SelectedPartIndexVec.size() > 1 )
-        {
-            vector < FeaStructure* > structvec = StructureMgr.GetAllFeaStructs();
-
-            for ( size_t i = 0; i < m_SelectedPartIndexVec.size(); i++ )
-            {
-                if ( m_SelectedPartIndexVec[i] < structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() )
-                {
-                    FeaPart* prt = structvec[StructureMgr.GetCurrStructIndex()]->GetFeaPart( m_SelectedPartIndexVec[i] );
-
-                    if ( prt )
-                    {
-                        if ( prt->GetType() == vsp::FEA_SKIN )
-                        {
-                            prt->m_IncludedElements.Set( vsp::FEA_SHELL );
-                        }
-                        else if ( prt->GetType() != vsp::FEA_FIX_POINT )
-                        {
-                            prt->m_IncludedElements.Set( (int)curr_val );
-                        }
-                    }
-                }
-                else if ( m_SelectedPartIndexVec[i] >= structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() )
-                {
-                    SubSurface* ssurf = structvec[StructureMgr.GetCurrStructIndex()]->GetFeaSubSurf( m_SelectedPartIndexVec[i] - structvec[StructureMgr.GetCurrStructIndex()]->NumFeaParts() );
-
-                    if ( ssurf )
-                    {
-                        if ( ssurf->GetType() == vsp::SS_LINE_ARRAY  )
-                        {
-                            ssurf->m_IncludedElements.Set( vsp::FEA_BEAM );
-                        }
-                        else
-                        {
-                            ssurf->m_IncludedElements.Set( (int)curr_val );
-                        }
                     }
                 }
             }
@@ -3053,14 +2779,6 @@ void StructScreen::GuiDeviceCallBack( GuiDevice* device )
                 fea_prop->SetName( m_FeaPropertyNameInput.GetString() );
             }
         }
-    }
-    else if ( device == &m_GenPropertyChoice )
-    {
-        UpdateGenPropertyIndex( &m_GenPropertyChoice );
-    }
-    else if ( device == &m_GenCapPropertyChoice )
-    {
-        UpdateGenCapPropertyIndex( &m_GenCapPropertyChoice );
     }
     else if ( device == &m_AddFeaMaterialButton )
     {
@@ -3427,9 +3145,18 @@ void StructScreen::LoadDrawObjs( vector< DrawObj* > &draw_obj_vec )
                 return;
             }
 
-            Update(); // Updating right before drawing ensures the structure is up to date
-
             vector < FeaPart* > partvec = curr_struct->GetFeaPartVec();
+            vector < int > active_part_index_vec;
+
+            for ( size_t i = 0; i < m_SelectedPartIndexVec.size(); i++ )
+            {
+                if ( m_SelectedPartIndexVec[i] < curr_struct->NumFeaParts() )
+                {
+                    active_part_index_vec.push_back( m_SelectedPartIndexVec[i] );
+                }
+            }
+
+            curr_struct->HighlightFeaParts( active_part_index_vec );
 
             for ( unsigned int i = 0; i < (int)partvec.size(); i++ )
             {
@@ -3463,62 +3190,5 @@ void StructScreen::LoadDrawObjs( vector< DrawObj* > &draw_obj_vec )
 
         // Load Draw Objects for FeaMesh
         FeaMeshMgr.LoadDrawObjs( draw_obj_vec );
-    }
-}
-
-void StructScreen::UpdateDrawObjs()
-{
-    if ( FeaMeshMgr.GetFeaMeshInProgress() == true )
-    {
-        return;
-    }
-
-    Vehicle* veh = m_ScreenMgr->GetVehiclePtr();
-
-    if ( !veh )
-    {
-        return;
-    }
-
-    if ( StructureMgr.ValidTotalFeaStructInd( StructureMgr.GetCurrStructIndex() ) )
-    {
-        vector < FeaStructure* > totalstructvec = StructureMgr.GetAllFeaStructs();
-
-        FeaStructure* curr_struct = totalstructvec[StructureMgr.GetCurrStructIndex()];
-
-        if ( !curr_struct )
-        {
-            return;
-        }
-
-        int k = 0;
-
-        vector < FeaPart* > curr_part_vec;
-
-        for ( size_t i = 0; i < m_SelectedPartIndexVec.size(); i++ )
-        {
-            curr_part_vec.push_back( curr_struct->GetFeaPart( m_SelectedPartIndexVec[i] ) );
-        }
-
-        vector < FeaPart* > partvec = curr_struct->GetFeaPartVec();
-
-        for ( unsigned int i = 0; i < (int)partvec.size(); i++ )
-        {
-            bool match = false;
-
-            for ( size_t j = 0; j < curr_part_vec.size(); j++ )
-            {
-                if ( partvec[i] == curr_part_vec[j] )
-                {
-                    match = true;
-                }
-            }
-
-            if ( partvec[i]->m_DrawFeaPartFlag() )
-            {
-                partvec[i]->UpdateDrawObjs( k, match );
-                k++;
-            }
-        }
     }
 }

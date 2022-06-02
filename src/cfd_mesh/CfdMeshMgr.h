@@ -52,10 +52,6 @@
 #if !defined(CfdMeshMgr_CfdMeshMgr__INCLUDED_)
 #define CfdMeshMgr_CfdMeshMgr__INCLUDED_
 
-//#ifndef DEBUG_CFD_MESH
-//#define DEBUG_CFD_MESH
-//#endif
-
 #include "Surf.h"
 #include "Mesh.h"
 #include "SCurve.h"
@@ -184,7 +180,7 @@ public:
     virtual vector< Surf* > CreateDomainSurfs();
 
     virtual void MergeBorderEndPoints();
-    virtual void MergeIPntGroups( list< IPntGroup* > & iPntGroupList, double tol );
+    virtual void MergeEndPointCloud( IPntCloud &cloud, double tol );
     virtual void TessellateChains();
     virtual void SetWakeAttachChain( ISegChain* c );
     virtual void MatchWakes();
@@ -193,6 +189,7 @@ public:
     virtual void BuildMesh();
     virtual void BuildTargetMap( int output_type );
     virtual void RemoveInteriorTris();
+    virtual void RemoveTrimTris() {};  // Implemented for FEAMesh
     virtual void ConnectBorderEdges( bool wakeOnly );
     virtual void MatchBorderEdges( list< Edge* > edgeList );
 

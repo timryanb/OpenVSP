@@ -35,12 +35,14 @@ Puw::~Puw()
 IPnt::IPnt()
 {
     m_UsedFlag = false;
+    m_GroupedFlag = false;
     m_Index = 0;
 }
 
 IPnt::IPnt( Puw* p0, Puw* p1 )
 {
     m_UsedFlag = false;
+    m_GroupedFlag = false;
     m_Index = 0;
     m_Puws.push_back( p0 );
     m_Puws.push_back( p1 );
@@ -65,6 +67,111 @@ void IPnt::CompPnt()
     }
 
     m_Pnt = psum;
+}
+
+void IPnt::CompPnt_WithMetrics()
+{
+    vector < vec3d > pts( m_Puws.size() );
+    vec3d psum;
+    for ( int i = 0 ; i < ( int )m_Puws.size() ; i++ )
+    {
+        vec2d uw = m_Puws[i]->m_UW;
+        vec3d p  = m_Puws[i]->m_Surf->CompPnt( uw[0], uw[1] );
+        psum = psum + p;
+
+        pts[i] = p;
+    }
+    if ( m_Puws.size() )
+    {
+        psum = psum * ( 1.0 / ( double )m_Puws.size() );
+
+        double dave = 0;
+        for ( int i = 0 ; i < ( int )m_Puws.size() ; i++ )
+        {
+            dave += dist( pts[i], psum );
+        }
+        dave /= m_Puws.size();
+
+        printf( "Number in group %d average spread %e\n", m_Puws.size(), dave );
+    }
+
+    m_Pnt = psum;
+}
+
+double IPnt::CalcDave()
+{
+    vector < vec3d > pts( m_Puws.size() );
+    vec3d psum;
+    double dave = -1;
+
+    for ( int i = 0 ; i < ( int )m_Puws.size() ; i++ )
+    {
+        vec2d uw = m_Puws[i]->m_UW;
+        vec3d p  = m_Puws[i]->m_Surf->CompPnt( uw[0], uw[1] );
+        psum = psum + p;
+
+        pts[i] = p;
+    }
+    if ( m_Puws.size() )
+    {
+        dave = 0;
+        psum = psum * ( 1.0 / ( double )m_Puws.size() );
+
+        for ( int i = 0 ; i < ( int )m_Puws.size() ; i++ )
+        {
+            dave += dist( pts[i], psum );
+        }
+        dave /= m_Puws.size();
+
+    }
+
+    return dave;
+}
+
+void IPnt::DumpMatlab( FILE* fp, int figno )
+{
+    vector < vec3d > pts( m_Puws.size() );
+
+    fprintf( fp, "figure( %d );\n", figno );
+    fprintf( fp, "hold on\n" );
+
+    vec3d psum;
+    for ( int i = 0 ; i < ( int )m_Puws.size() ; i++ )
+    {
+        vec2d uw = m_Puws[i]->m_UW;
+        vec3d p  = m_Puws[i]->m_Surf->CompPnt( uw[0], uw[1] );
+        fprintf( fp, "plot3( %.19e, %.19e, %.19e, 'kx' );\n", p.x(), p.y(), p.z() );
+        psum = psum + p;
+        pts[i] = p;
+    }
+    if ( m_Puws.size() )
+    {
+        psum = psum * ( 1.0 / ( double )m_Puws.size() );
+        fprintf( fp, "plot3( %.19e, %.19e, %.19e, 'bo' );\n", psum.x(), psum.y(), psum.z() );
+
+        double dave = 0;
+        for ( int i = 0 ; i < ( int )m_Puws.size() ; i++ )
+        {
+            dave += dist( pts[i], psum );
+        }
+        dave /= m_Puws.size();
+        fprintf( fp, "title( 'N = %d dave = %.19e' );\n", m_Puws.size(), dave );
+    }
+    fprintf( fp, "hold off\n" );
+    fprintf( fp, "axis equal\n" );
+
+}
+
+void IPnt::GetDOPts( vector < vec3d > &pts )
+{
+    int offset = pts.size();
+    pts.resize( offset + m_Puws.size() );
+    for ( int i = 0 ; i < ( int )m_Puws.size() ; i++ )
+    {
+        vec2d uw = m_Puws[i]->m_UW;
+        vec3d p  = m_Puws[i]->m_Surf->CompPnt( uw[0], uw[1] );
+        pts[ i + offset ] = p;
+    }
 }
 
 Puw* IPnt::GetPuw( Surf* surf )
@@ -866,12 +973,8 @@ bool ISegChain::AddBorderSplit( Puw* uw )
     }
     if ( closest_dist < 0.1 )
     {
-        fprintf( CfdMeshMgr.m_DebugFile, "  Closest_Dist = %12.10f UW =  %12.10f\n",
-                 closest_dist, closest_uw_dist );
-
+        fprintf( CfdMeshMgr.m_DebugFile, "  Closest_Dist = %12.10f\n", closest_dist );
     }
-
-
 #endif
 
 }
@@ -921,6 +1024,12 @@ bool ISegChain::AddBorderSplit( Puw* uw )
 //}
 
 
+// When splitting intersection chains (IntersectSplitChains) or border curves (SplitBorderCurves), compound
+// intersections can lead to identified split points that are separate, but should be coincident.  MergeSplits
+// identifies these splits and merges them.
+// Coincident splits are identified with a dimensional (model XYZ) tolerance.  This tolerance could likely be much
+// larger than it is as it is really a search radius.  We do not expect false positives to be very close at all.
+// When done, the first split identified of each group is used.  No averaging or smearing is currently performed.
 void ISegChain::MergeSplits()
 {
     int i, j;

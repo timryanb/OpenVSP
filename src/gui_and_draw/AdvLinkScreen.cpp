@@ -303,6 +303,10 @@ void AdvLinkScreen::Hide()
 //==== Callbacks ====//
 void AdvLinkScreen::CallBack( Fl_Widget *w )
 {
+
+    int edit_link_index = AdvLinkMgr.GetEditLinkIndex();
+    AdvLink* edit_link = AdvLinkMgr.GetLink(edit_link_index);
+
     if ( w == m_LinkBrowser )
     {
         int sel = m_LinkBrowser->value();
@@ -311,25 +315,44 @@ void AdvLinkScreen::CallBack( Fl_Widget *w )
     else if ( w == m_InputBrowser )
     {
         m_InputBrowserSelect = m_InputBrowser->value() - 2;
+
+        vector <VarDef> ivars = edit_link->GetInputVars();
+        m_VarNameInput.Update( ivars[ m_InputBrowserSelect ].m_VarName );
+        m_ParmPicker.SetParmChoice( ivars[ m_InputBrowserSelect ].m_ParmID );
     }
     else if ( w == m_OutputBrowser )
     {
         m_OutputBrowserSelect = m_OutputBrowser->value() - 2;
+
+        vector <VarDef> ovars = edit_link->GetOutputVars();
+        m_VarNameInput.Update(ovars[ m_OutputBrowserSelect ].m_VarName );
+        m_ParmPicker.SetParmChoice(ovars[ m_OutputBrowserSelect ].m_ParmID );
     }
-    else if ( w == m_InputGroup.GetGroup() )
+    else if ( w == m_InputGroup.GetGroup() || w == m_OutputGroup.GetGroup() )
     {
         if ( Fl::event() == FL_PASTE || Fl::event() == FL_DND_RELEASE )
         {
-            string ParmID( Fl::event_text() );
-            AdvLinkMgr.AddInput( ParmID, m_VarNameInput.GetString() );
-        }
-    }
-    else if ( w == m_OutputGroup.GetGroup() )
-    {
-        if ( Fl::event() == FL_PASTE || Fl::event() == FL_DND_RELEASE )
-        {
-            string ParmID( Fl::event_text() );
-            AdvLinkMgr.AddOutput( ParmID, m_VarNameInput.GetString() );
+            if ( edit_link )
+            {
+                if ( edit_link->DuplicateVarName( m_VarNameInput.GetString() ) )
+                {
+                    m_ScreenMgr->Alert( "Duplicate Var Name" );
+                }
+                else if ( m_VarNameInput.GetString() == "" )
+                {
+                    m_ScreenMgr->Alert( "Invalid Var Name" );
+                }
+                else if ( w == m_InputGroup.GetGroup() )
+                {
+                    string ParmID( Fl::event_text() );
+                    AdvLinkMgr.AddInput( ParmID, m_VarNameInput.GetString() );
+                }
+                else if ( w == m_OutputGroup.GetGroup() )
+                {
+                    string ParmID( Fl::event_text() );
+                    AdvLinkMgr.AddOutput( ParmID, m_VarNameInput.GetString() );
+                }
+            }
         }
     }
     else
@@ -450,12 +473,7 @@ void AdvLinkScreen::GuiDeviceCallBack( GuiDevice* gui_device )
         {
             edit_link->SetScriptCode( m_CodeBuffer->text() );
             bool valid_script = edit_link->BuildScript();
-            if ( !valid_script )
-            {
-                fl_message_title( "Compile Errors" );
-                fl_message( "%s", edit_link->GetScriptErrors().c_str() );
-            }
-            else
+            if ( valid_script )
             {
                 edit_link->ForceUpdate();
             }

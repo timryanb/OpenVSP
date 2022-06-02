@@ -665,3 +665,34 @@ void UtilTestSuite::BilinearInterpTest()
     TEST_ASSERT_DELTA( interp_val, 9.8125, DBL_EPSILON );
 
 }
+
+void UtilTestSuite::FormatWidthTest()
+{
+    double v = 1234567890.1234567890;
+
+    int len = 8;
+    string fmt;
+    char buf[50];
+    string sbuf;
+    for ( int i = 0; i < 20; i++ )
+    {
+        fmt = StringUtil::NasFmt( v ) + "\n";
+        // printf( fmt.c_str(), v );
+
+        sprintf( buf, fmt.c_str(), v );
+        sbuf = string( buf );
+        StringUtil::remove_leading_trailing( sbuf, ' ' );
+        TEST_ASSERT( sbuf.length() == len + 1 );
+
+        fmt = StringUtil::NasFmt( -v ) + "\n";
+        // printf( fmt.c_str(), -v );
+
+        sprintf( buf, fmt.c_str(), -v );
+        sbuf = string( buf );
+        StringUtil::remove_leading_trailing( sbuf, ' ' );
+        TEST_ASSERT( sbuf.length() == len + 1);
+
+        v = v / 10;
+    }
+
+}
