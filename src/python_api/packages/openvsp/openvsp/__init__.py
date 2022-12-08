@@ -4,6 +4,7 @@ from .parasite_drag import *
 from .surface_patches import *
 from .utilities import *
 import os
+from .vehicle import VSPVehicle
 
 def setup_vspaero_path():
   base_dir = os.path.dirname(__file__)
