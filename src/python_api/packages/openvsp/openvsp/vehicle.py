@@ -105,5 +105,4 @@ def wrap_method(original_method):
 
 # Loop through each function in vsp module and add it as a method to VSPVehicle
 for member_name, member_func in getmembers(vsp, isfunction):
-    # Skip SetVehicleIndex and CreateVehicle
     setattr(VSPVehicle, member_name, wrap_method(member_func))
