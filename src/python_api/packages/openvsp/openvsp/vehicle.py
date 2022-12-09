@@ -9,7 +9,7 @@ from . import vsp
 class VSPVehicle:
 
     # Add attribute to keep track of which VSPVehicle instance is currently loaded in openvsp
-    _last_instance = None
+    _current_instance = None
 
     def __init__(self, file_name=None):
         """
@@ -55,39 +55,40 @@ class VSPVehicle:
         :return:
         """
         # Check if the VSPVehicle instance has changed since the last call to the module
-        last_instance = self._last_instance
-        if last_instance != self:
+        current_instance = self._current_instance
+        if current_instance != self:
             # Give the previous VSPVehicle instance a chance to save its work
-            if isinstance(last_instance, VSPVehicle):
-                last_instance._save_instance()
+            if isinstance(current_instance, VSPVehicle):
+                current_instance._save_instance()
             # Clear the model
             vsp.ClearVSPModel()
             # If this instance wasn't just created, load in model into the OpenVSP API
             if not new_instance:
                 self._load_instance()
-            # Update vsp modules last instance with self
-            self._set_last_instance(self)
+            # Update class attribute for current instance with self
+            self._set_current_instance(self)
 
     def __del__(self):
         """
         Do necessary cleanup before class is freed
         """
         # Check if this was the last loaded instance
-        if self._last_instance == self:
+        if self._current_instance == self:
             # Clear model
             vsp.ClearVSPModel()
             # Remove pointer to self
-            self._set_last_instance(None)
+            self._set_current_instance(None)
+        # Close temp file so it can be deleted
         self._tmp_file.close()
 
     @classmethod
-    def _set_last_instance(cls, instance):
+    def _set_current_instance(cls, instance):
         """
-        Update last instance attribute of class so all instances know which vehicle is currently loaded
+        Update current instance attribute of class so all instances know which vehicle is currently loaded
 
         :param instance: Pointer to last VSPVehicle instance to call openvsp or None
         """
-        cls._last_instance = instance
+        cls._current_instance = instance
 
 # This function takes in a function from the vsp module
 # and wraps it with a _switch_instance call before and after the call
@@ -102,7 +103,7 @@ def wrap_method(original_method):
     # Return new wrapped method
     return new_method
 
-# Loop through each function in vsp module and add it as a class method to VSPVehicle
+# Loop through each function in vsp module and add it as a method to VSPVehicle
 for member_name, member_func in getmembers(vsp, isfunction):
     # Skip SetVehicleIndex and CreateVehicle
     setattr(VSPVehicle, member_name, wrap_method(member_func))
