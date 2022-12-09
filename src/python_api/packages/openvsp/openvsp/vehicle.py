@@ -3,13 +3,14 @@ from inspect import getmembers, isfunction
 
 from . import vsp
 
-# Add attribute to keep track of which VSPVehicle instance has used the module last
-vsp._last_instance = None
-
 # Define VSPVehicle class
 # This class serves as a light wrapper for doing the bookkeeping of different vehicle instances for the user
 # This allows multiple independent instances to be used in same Python instance
 class VSPVehicle:
+
+    # Add attribute to keep track of which VSPVehicle instance is currently loaded in openvsp
+    _last_instance = None
+
     def __init__(self, file_name=None):
         """
         Initialize class
@@ -54,7 +55,7 @@ class VSPVehicle:
         :return:
         """
         # Check if the VSPVehicle instance has changed since the last call to the module
-        last_instance = vsp._last_instance
+        last_instance = self._last_instance
         if last_instance != self:
             # Give the previous VSPVehicle instance a chance to save its work
             if isinstance(last_instance, VSPVehicle):
@@ -65,16 +66,28 @@ class VSPVehicle:
             if not new_instance:
                 self._load_instance()
             # Update vsp modules last instance with self
-            vsp._last_instance = self
+            self._set_last_instance(self)
 
     def __del__(self):
         """
         Do necessary cleanup before class is freed
         """
-        if vsp._last_instance == self:
+        # Check if this was the last loaded instance
+        if self._last_instance == self:
+            # Clear model
             vsp.ClearVSPModel()
-            vsp._last_instance = None
+            # Remove pointer to self
+            self._set_last_instance(None)
         self._tmp_file.close()
+
+    @classmethod
+    def _set_last_instance(cls, instance):
+        """
+        Update last instance attribute of class so all instances know which vehicle is currently loaded
+
+        :param instance: Pointer to last VSPVehicle instance to call openvsp or None
+        """
+        cls._last_instance = instance
 
 # This function takes in a function from the vsp module
 # and wraps it with a _switch_instance call before and after the call
