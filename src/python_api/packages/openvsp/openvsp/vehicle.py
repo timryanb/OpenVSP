@@ -17,7 +17,7 @@ class VSPVehicle:
         :param file_name: vsp3 file name to load on creation
         """
         # Create temporary file to hold VSP model when switching to another vehicle instance
-        self._tmp_file = tempfile.NamedTemporaryFile()
+        self._tmp_file = tempfile.NamedTemporaryFile(suffix=".vsp3")
         # Switch openvsp api to current vehicle instance
         self._switch_instance(new_instance=True)
         # Read in vsp3 file if provided
