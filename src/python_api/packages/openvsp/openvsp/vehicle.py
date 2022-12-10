@@ -23,7 +23,7 @@ class VSPVehicle:
         self._switch_instance(new_instance=True)
         # Read in vsp3 file if provided
         if file_name is not None:
-            self.ReadVSPFile(file_name)
+            vsp.ReadVSPFile(file_name)
             self._file_name = file_name
         else:
             self._file_name = "Unnamed.vsp3"
