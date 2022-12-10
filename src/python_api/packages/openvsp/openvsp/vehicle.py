@@ -68,7 +68,7 @@ class VSPVehicle:
         current_instance = self._current_instance
         if current_instance != self:
             # Give the previous VSPVehicle instance a chance to save its work
-            if isinstance(current_instance, VSPVehicle):
+            if current_instance is not None:
                 current_instance._save_instance()
             # Clear the model
             vsp.ClearVSPModel()
