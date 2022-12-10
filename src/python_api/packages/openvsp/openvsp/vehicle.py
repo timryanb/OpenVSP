@@ -4,9 +4,19 @@ from inspect import getmembers, isfunction
 from . import vsp
 
 # Define VSPVehicle class
-# This class serves as a light wrapper for doing the bookkeeping of different vehicle instances for the user
-# This allows multiple independent instances to be used in same Python instance
 class VSPVehicle:
+    """
+    This class serves as a light wrapper for doing the bookkeeping of different vehicle instances for the user
+    This allows multiple independent instances to be used in same Python instance
+    The class uses the same API as the vsp module itself
+
+    >>> vehicle1 = VSPVehicle()
+    >>> vehicle2 = VSPVehicle("model2.vsp3")
+    >>> vehicle1.ReadVSPFile("model1.vsp3")
+    >>> geoms1 = vehicle1.FindGeoms()
+    >>> geoms2 = vehicle2.FindGeoms()
+    >>> vehicle1.ClearVSPModel()
+    """
 
     # Add attribute to keep track of which VSPVehicle instance is currently loaded in openvsp
     _current_instance = None
