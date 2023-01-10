@@ -1,4 +1,5 @@
 import tempfile
+import os
 from inspect import getmembers, isfunction
 
 from . import vsp
@@ -28,7 +29,9 @@ class VSPVehicle:
         :param file_name: vsp3 file name to load on creation
         """
         # Create temporary file to hold VSP model when switching to another vehicle instance
-        self._tmp_file = tempfile.NamedTemporaryFile(suffix=".vsp3")
+        self._tmp_file = tempfile.NamedTemporaryFile(suffix=".vsp3", delete=False)
+        # Close file on Python side, so VSP can write to it (Only necessary for Windows)
+        self._tmp_file.close()
         # Switch openvsp api to current vehicle instance
         self._switch_instance(new_instance=True)
         # Read in vsp3 file if provided
@@ -88,8 +91,8 @@ class VSPVehicle:
             vsp.ClearVSPModel()
             # Remove pointer to self
             self._set_current_instance(None)
-        # Close temp file so it can be deleted
-        self._tmp_file.close()
+        # Delete temp file
+        os.remove(self._tmp_file.name)
 
     @classmethod
     def _set_current_instance(cls, instance):
