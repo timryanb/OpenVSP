@@ -1,6 +1,6 @@
 import tempfile
 import os
-from inspect import getmembers, isfunction
+from inspect import getmembers, isroutine
 
 from . import vsp
 
@@ -117,5 +117,5 @@ def wrap_method(original_method):
     return new_method
 
 # Loop through each function in vsp module and add it as a method to VSPVehicle
-for member_name, member_func in getmembers(vsp, isfunction):
+for member_name, member_func in getmembers(vsp, isroutine):
     setattr(VSPVehicle, member_name, wrap_method(member_func))
